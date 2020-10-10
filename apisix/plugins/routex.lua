@@ -18,6 +18,123 @@ local core     = require("apisix.core")
 local upstream = require("apisix.upstream")
 local math     = math
 
+-- match schema
+local anyOf = {
+    {
+        type = "array",
+        items = {
+            {
+                type = "string"
+            },
+            {
+                type = "string",
+                enum = {
+                    "==",
+                    "~=",
+                    "~~"
+                }
+            },
+            {
+                type = "string"
+            }
+        }
+    },
+    {
+        type = "array",
+        items = {
+            {
+                type = "string",
+            },
+            {
+                type = "string",
+                enum = {
+                    ">",
+                    "<",
+                    ">=",
+                    "<="
+                }
+            },
+            {
+                type = "string",
+                pattern = "(^[0-9]+.[0-9]+$|^[0-9]+$)"
+            }
+        }
+    }
+}
+
+local match = {
+    type = "array",
+    items = {
+        type = "object",
+        properties = {
+            vars = {
+                type = "array",
+                items = {
+                    anyOf = anyOf
+                }
+            }
+        }
+    }
+}
+
+-- upstreams schema
+local upstream = {
+    type = "object",
+    additionalProperties = false,
+    properties = {
+        name = { type = "string" },
+        type = {
+            type = "string",
+            enum = {
+                "roundrobin",
+                "chash"
+            }
+        },
+        nodes = { type = "object" },
+        timeout = { type = "object" },
+        enable_websocket = { type = "boolean" },
+        pass_host = {
+            type = "string",
+            enum = {
+                "pass", "node", "rewrite"
+            }
+        },
+        upstream_host = { type = "string" }
+    },
+    dependencies = {
+        pass_host = {
+            anyOf = {
+                {
+                    properties = {
+                        pass_host = { enum = { "rewrite" }}
+                    },
+                    required = { "upstream_host" }
+                },
+                {
+                    properties = {
+                        pass_host = { enum = { "pass", "node" }}
+                    },
+                }
+            }
+        }
+    }
+}
+
+local upstreams = {
+    type = "array",
+    items = {
+        type = "object",
+        properties = {
+            upstream_id = { type = "string" },
+            upstream = upstream,
+            weight = {
+                type = "integer",
+                minimum = 0,
+                maximum = 100
+            }
+        }
+    }
+}
 
 local schema = {
     type = "object",
@@ -27,116 +144,8 @@ local schema = {
             items = {
                 type = "object",
                 properties = {
-                    match = {
-                        type = "array",
-                        items = {
-                            type = "object",
-                            properties = {
-                                vars = {
-                                    type = "array",
-                                    items = {
-                                        anyOf = {
-                                            {
-                                                type = "array",
-                                                items = {
-                                                    {
-                                                        type = "string"
-                                                    },
-                                                    {
-                                                        type = "string",
-                                                        enum = {
-                                                            "==",
-                                                            "~=",
-                                                            "~~"
-                                                        }
-                                                    },
-                                                    {
-                                                        type = "string"
-                                                    }
-                                                }
-                                            },
-                                            {
-                                                type = "array",
-                                                items = {
-                                                    {
-                                                        type = "string",
-                                                    },
-                                                    {
-                                                        type = "string",
-                                                        enum = {
-                                                            ">",
-                                                            "<",
-                                                            ">=",
-                                                            "<="
-                                                        }
-                                                    },
-                                                    {
-                                                        type = "string",
-                                                        pattern = "(^[0-9]+.[0-9]+$|^[0-9]+$)"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    upstreams = {
-                        type = "array",
-                        items = {
-                            type = "object",
-                            properties = {
-                                upstream_id = { type = "string" },
-                                upstream = {
-                                    type = "object",
-                                    additionalProperties = false,
-                                    properties = {
-                                        name = { type = "string" },
-                                        type = {
-                                            type = "string",
-                                            enum = {
-                                                "roundrobin",
-                                                "chash"
-                                            }
-                                        },
-                                        nodes = { type = "object" },
-                                        timeout = { type = "object" },
-                                        enable_websocket = { type = "boolean" },
-                                        pass_host = {
-                                            type = "string",
-                                            enum = {
-                                                "pass", "node", "rewrite"
-                                            }
-                                        },
-                                        upstream_host = { type = "string" }
-                                    },
-                                    dependencies = {
-                                        pass_host = {
-                                            anyOf = {
-                                                {
-                                                    properties = {
-                                                        pass_host = { enum = { "rewrite" }}
-                                                    },
-                                                    required = { "upstream_host" }
-                                                },
-                                                {
-                                                    properties = {
-                                                        pass_host = { enum = { "pass", "node" }}
-                                                    },
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                weight = {
-                                    type = "integer",
-                                    minimum = 0,
-                                    maximum = 100
-                                }
-                            }
-                        }
-                    }
+                    match = match,
+                    upstreams = upstreams
                 }
             }
         }
