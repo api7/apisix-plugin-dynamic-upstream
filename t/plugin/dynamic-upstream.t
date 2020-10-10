@@ -34,13 +34,13 @@ __DATA__
                 ngx.HTTP_PUT,
                 [[{
                     "plugins": {
-                        "routex": {
+                        "dynamic-upstream": {
                             "rules": [
                                 {
                                     "match": [
                                         {
                                             "vars": [
-                                                [ "arg_name","==","jack-1" ],
+                                                [ "arg_name","==","jack" ],
                                                 [ "http_api-a",">=","26" ],
                                                 [ "http_api-b","~=","hello" ]
                                             ]
@@ -62,7 +62,7 @@ __DATA__
                                                "name": "upstream_A",
                                                "type": "roundrobin",
                                                "nodes": {
-                                                   "baidu.com":100
+                                                   "127.0.0.1:1981":10
                                                },
                                                "timeout": {
                                                    "connect": 15,
@@ -70,7 +70,7 @@ __DATA__
                                                    "read": 15
                                                }
                                            },
-                                           "weight": 20
+                                           "weight": 90
                                         }
                                     ]
                                 }

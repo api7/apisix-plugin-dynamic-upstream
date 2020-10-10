@@ -16,10 +16,11 @@
 --
 local core     = require("apisix.core")
 local upstream = require("apisix.upstream")
+local ngx_re   = require("ngx.re")
 local math     = math
 
--- match schema
-local anyOf = {
+-- schema of match part
+local option_def = {
     {
         type = "array",
         items = {
@@ -37,7 +38,9 @@ local anyOf = {
             {
                 type = "string"
             }
-        }
+        },
+        minItems = 0,
+        maxItems = 10
     },
     {
         type = "array",
@@ -58,11 +61,13 @@ local anyOf = {
                 type = "string",
                 pattern = "(^[0-9]+.[0-9]+$|^[0-9]+$)"
             }
-        }
+        },
+        minItems = 0,
+        maxItems = 10
     }
 }
 
-local match = {
+local match_def = {
     type = "array",
     items = {
         type = "object",
@@ -70,15 +75,15 @@ local match = {
             vars = {
                 type = "array",
                 items = {
-                    anyOf = anyOf
+                    anyOf = option_def
                 }
             }
         }
     }
 }
 
--- upstreams schema
-local upstream = {
+-- schema of upstreams part
+local upstream_def = {
     type = "object",
     additionalProperties = false,
     properties = {
@@ -88,7 +93,8 @@ local upstream = {
             enum = {
                 "roundrobin",
                 "chash"
-            }
+            },
+            default = "roundrobin"
         },
         nodes = { type = "object" },
         timeout = { type = "object" },
@@ -120,20 +126,22 @@ local upstream = {
     }
 }
 
-local upstreams = {
+local upstreams_def = {
     type = "array",
     items = {
         type = "object",
         properties = {
             upstream_id = { type = "string" },
-            upstream = upstream,
+            upstream = upstream_def,
             weight = {
                 type = "integer",
                 minimum = 0,
                 maximum = 100
             }
         }
-    }
+    },
+    minItems = 0,
+    maxItems = 1
 }
 
 local schema = {
@@ -144,15 +152,15 @@ local schema = {
             items = {
                 type = "object",
                 properties = {
-                    match = match,
-                    upstreams = upstreams
+                    match = match_def,
+                    upstreams = upstreams_def
                 }
             }
         }
     }
 }
 
-local plugin_name = "routex"
+local plugin_name = "dynamic-upstream"
 
 local _M = {
     version = 0.1,
@@ -162,9 +170,19 @@ local _M = {
 }
 
 
+function _M.check_schema(conf)
+    local ok, err = core.schema.check(schema, conf)
+
+    if not ok then
+        return false, err
+    end
+
+    return true
+end
+
+
 local function generate_random_num()
     local random_val = math.random(1,100)
-    core.log.info("random-xxx: ", random_val)
     return random_val
 end
 
@@ -223,73 +241,87 @@ local operator_funcs = {
 }
 
 
-function _M.check_schema(conf)
-    local ok, err = core.schema.check(schema, conf)
+local function set_upstream(upstream_info, ctx)
+    local upstream_val = upstream_info["upstream"]
+    local nodes = upstream_val["nodes"]
+    core.log.info("upstream_val['nodes']: ",  core.json.delay_encode(upstream_val["nodes"]))
 
+    local host_port, weight
+    for k, v in pairs(nodes) do
+        host_port = k
+        weight = v
+    end
+    core.log.info("host_port: ", host_port, " weight: ", weight)
+
+    local host_port_array = ngx_re.split(host_port, ":")
+    local host = host_port_array[1]
+    local port = host_port_array[2]
+
+    if not port then
+        port = 80
+    else
+        port = tonumber(port)
+    end
+    core.log.info("host: ", host, " port: ", port)
+
+    local up_conf = {
+        name = upstream_val["name"],
+        type = upstream_val["type"],
+        nodes = {
+            {host = host, port = port, weight = weight}
+        }
+    }
+
+    local ok, err = upstream.check_schema(up_conf)
     if not ok then
-        return false, err
+        return 500, err
     end
 
-    return true
+    local matched_route = ctx.matched_route
+    upstream.set(ctx, up_conf.type .. "#route_" .. matched_route.value.id,
+                ctx.conf_version, up_conf, matched_route)
+    return
 end
 
 
 function _M.access(conf, ctx)
-    core.log.info("plugin access phase, conf: ", core.json.encode(conf))
+    local upstream_info = {}
+    local match_flag
 
-    local upstreams = {}
-    local match_flag = true
-
-    if not conf.rules then
-        return
-    end
-
-    for _, k in pairs(conf.rules) do
-        upstreams = k.upstreams
-        for _, v in pairs(k.match) do
-            if not match_flag then
-                break
-            end
-            for _, v2 in pairs(v.vars) do
+    for _, v in pairs(conf.rules) do
+        upstream_info = v.upstreams[1]
+        for _, v1 in pairs(v.match) do
+            match_flag = true
+            for _, v2 in pairs(v1.vars) do
                 local val = operator_funcs[v2[2]](v2, ctx)
-                core.log.info("result: ", val)
-                if val == false then
-                    core.log.info("match check faild")
+                core.log.info("val: ", val)
+                if not val then
+                    core.log.info("match check faild.")
                     match_flag = val
                     break
                 end
             end
-            core.log.info("v--:",core.json.delay_encode(v))
+            if match_flag then
+                break
+            end
         end
     end
-
 
     core.log.info("match_flag: ", match_flag)
 
     if match_flag then
-        core.log.info("upstream-xxx: ", core.json.delay_encode(upstreams))
-        -- local ip = conf.rules[1].upstreams[1]["ip"]
-        -- local port = conf.rules[1].upstreams[1]["port"]
-        local up_conf = {
-            type = "roundrobin",
-            nodes = {
-                {host = "127.0.0.1", port = "1980", weight = 1}
-            }
-        }
+        core.log.info("upstream_info: ", core.json.delay_encode(upstream_info))
 
-        local ok, err = upstream.check_schema(up_conf)  -- test case has error info
-        -- if not ok then
-        --     return 500, err
-        -- end
+        local w = upstream_info["weight"]
+        local random_val = generate_random_num()
+        core.log.info("random_val: ",random_val ," w: ", w)
 
-        local matched_route = ctx.matched_route
-        upstream.set(ctx, up_conf.type .. "#route_" .. matched_route.value.id,
-                     ctx.conf_version, up_conf, matched_route)
-        return
+        if random_val <= w then
+            return set_upstream(upstream_info, ctx)
+        end
     end
 
     return
-
 end
 
 
