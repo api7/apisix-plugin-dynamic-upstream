@@ -33,7 +33,6 @@ __DATA__
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
                 [[{
-                    "methods": ["GET"],
                     "plugins": {
                         "routex": {
                             "rules": [
@@ -41,11 +40,21 @@ __DATA__
                                     "match": [
                                         {
                                             "vars": [
-                                                [ "arg_name","==","jack" ],
+                                                [ "arg_name","==","jack-1" ],
                                                 [ "http_api-a",">=","26" ],
-                                                [ "http_api-b","~~","hello" ]
+                                                [ "http_api-b","~=","hello" ]
                                             ]
-                                        }                            
+                                        },
+                                        {
+                                            "vars": [
+                                                ["arg_user_id", "==", "100"]
+                                            ]
+                                        },
+                                        {
+                                            "vars": [
+                                                ["http_apisix", "==", "apisix"]
+                                            ]
+                                        }                       
                                     ],
                                     "upstreams": [
                                         {
@@ -53,31 +62,16 @@ __DATA__
                                                "name": "upstream_A",
                                                "type": "roundrobin",
                                                "nodes": {
-                                                   "www.baidu.com":100
+                                                   "baidu.com":100
                                                },
-                                               "timeoue": {
+                                               "timeout": {
                                                    "connect": 15,
                                                    "send": 15,
                                                    "read": 15
                                                }
                                            },
                                            "weight": 20
-                                        },
-                                        {
-                                            "upstream": {
-                                                "name": "upstream_B",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                    "baidu.com":100
-                                                },
-                                                "timeout": {
-                                                    "connect":15,
-                                                    "send":15,
-                                                    "read":15
-                                                }
-                                            },
-                                            "weight": 80
-                                        }                                                              
+                                        }
                                     ]
                                 }
                             ]
@@ -108,10 +102,11 @@ passed
 
 === TEST 2: test routex plugin
 --- request
-GET /hello?name=jack&name-2=jack-2
+GET /hello?name=jack&user_id=100
 --- more_headers
 api-a: 30
-api-b: hello
+api-b: hello-123
+apisix: apisix
 --- error_code: 200
 --- response_body
 hello world

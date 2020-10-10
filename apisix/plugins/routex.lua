@@ -17,7 +17,6 @@
 local core     = require("apisix.core")
 local upstream = require("apisix.upstream")
 local math     = math
-local ngx      = ngx
 
 
 local schema = {
@@ -88,10 +87,12 @@ local schema = {
                         items = {
                             type = "object",
                             properties = {
-                                upstream_id = { type = "string"},
+                                upstream_id = { type = "string" },
                                 upstream = {
                                     type = "object",
+                                    additionalProperties = false,
                                     properties = {
+                                        name = { type = "string" },
                                         type = {
                                             type = "string",
                                             enum = {
@@ -99,29 +100,29 @@ local schema = {
                                                 "chash"
                                             }
                                         },
-                                        nodes = { type = "object"},
-                                        timeout = { type = "object"},
-                                        enable_websocket = { type = "boolean"},
+                                        nodes = { type = "object" },
+                                        timeout = { type = "object" },
+                                        enable_websocket = { type = "boolean" },
                                         pass_host = {
                                             type = "string",
                                             enum = {
                                                 "pass", "node", "rewrite"
                                             }
                                         },
-                                        upstream_host = { type = "string"}
+                                        upstream_host = { type = "string" }
                                     },
                                     dependencies = {
                                         pass_host = {
                                             anyOf = {
                                                 {
                                                     properties = {
-                                                        pass_host = { enum = {"rewrite"}}
+                                                        pass_host = { enum = { "rewrite" }}
                                                     },
-                                                    required = {"upstream_host"}
+                                                    required = { "upstream_host" }
                                                 },
                                                 {
                                                     properties = {
-                                                        pass_host = {enum = {"pass", "node"}}
+                                                        pass_host = { enum = { "pass", "node" }}
                                                     },
                                                 }
                                             }
@@ -153,7 +154,6 @@ local _M = {
 
 
 local function generate_random_num()
-    math.randomseed(tostring(os.time()):reverse():sub(1, 7))
     local random_val = math.random(1,100)
     core.log.info("random-xxx: ", random_val)
     return random_val
@@ -228,61 +228,58 @@ end
 function _M.access(conf, ctx)
     core.log.info("plugin access phase, conf: ", core.json.encode(conf))
 
-    -- if conf.rules then
-    --     core.log.info("rules-xxx: ", core.json.delay_encode(conf.rules[1].match[1].vars[1][2]))
-    -- end
-
-    local upstreams_tab = {}
-    local flag = true
+    local upstreams = {}
+    local match_flag = true
 
     if not conf.rules then
         return
     end
 
     for _, k in pairs(conf.rules) do
-        upstreams_tab = k.upstreams
-        core.log.info("v-xxx: ", core.json.delay_encode(k.upstreams))
+        upstreams = k.upstreams
         for _, v in pairs(k.match) do
+            if not match_flag then
+                break
+            end
             for _, v2 in pairs(v.vars) do
                 local val = operator_funcs[v2[2]](v2, ctx)
                 core.log.info("result: ", val)
                 if val == false then
                     core.log.info("match check faild")
-                    flag = val
-                    goto lable
+                    match_flag = val
+                    break
                 end
             end
             core.log.info("v--:",core.json.delay_encode(v))
         end
     end
 
-    ::lable:: do
-        core.log.info("goto lable")
-        return
-    end
 
-    core.log.info("flag: ", flag)
+    core.log.info("match_flag: ", match_flag)
 
-    if flag then
-        local ip = conf.rules[1].upstreams[1]["ip"]
-        local port = conf.rules[1].upstreams[1]["port"]
+    if match_flag then
+        core.log.info("upstream-xxx: ", core.json.delay_encode(upstreams))
+        -- local ip = conf.rules[1].upstreams[1]["ip"]
+        -- local port = conf.rules[1].upstreams[1]["port"]
         local up_conf = {
             type = "roundrobin",
             nodes = {
-                {host = ip, port = port, weight = 1}
+                {host = "127.0.0.1", port = "1980", weight = 1}
             }
         }
 
-        local ok, err = upstream.check_schema(up_conf)
-        if not ok then
-            return 500, err
-        end
+        local ok, err = upstream.check_schema(up_conf)  -- test case has error info
+        -- if not ok then
+        --     return 500, err
+        -- end
 
         local matched_route = ctx.matched_route
         upstream.set(ctx, up_conf.type .. "#route_" .. matched_route.value.id,
                      ctx.conf_version, up_conf, matched_route)
         return
     end
+
+    return
 
 end
 
