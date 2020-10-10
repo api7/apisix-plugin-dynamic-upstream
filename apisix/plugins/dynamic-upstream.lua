@@ -17,6 +17,7 @@
 local core     = require("apisix.core")
 local upstream = require("apisix.upstream")
 local ngx_re   = require("ngx.re")
+local re_find  = ngx.re.find
 local math     = math
 
 -- schema of match part
@@ -164,7 +165,7 @@ local plugin_name = "dynamic-upstream"
 
 local _M = {
     version = 0.1,
-    priority = 2500,        -- TODO: add a type field, may be a good idea
+    priority = 2523,        -- TODO: add a type field, may be a good idea
     name = plugin_name,
     schema = schema
 }
@@ -190,50 +191,43 @@ end
 local operator_funcs = {
     ["=="] = function(v2, ctx)
         if ctx.var[v2[1]] and ctx.var[v2[1]] == v2[3] then
-            core.log.info("==: ", ctx.var[v2[1]])
             return true
         end
         return false
     end,
     ["~="] = function(v2, ctx)
         if ctx.var[v2[1]] and ctx.var[v2[1]] ~= v2[3] then
-            core.log.info("~=: ", ctx.var[v2[1]])
             return true
         end
         return false
     end,
     ["~~"] = function(v2, ctx)
-        -- todo: regular matching
-        if ctx.var[v2[1]] and ctx.var[v2[1]] == v2[3] then
-            core.log.info("~~: ", ctx.var[v2[1]])
+        local from = re_find(ctx.var[v2[1]], v2[3], "jo")
+        if from then
             return true
         end
         return false
     end,
     [">"] = function(v2, ctx)
         if ctx.var[v2[1]] and ctx.var[v2[1]] > v2[3] then
-            core.log.info(">: ", ctx.var[v2[1]])
             return true
         end
         return false
     end,
     [">="] = function(v2, ctx)
         if ctx.var[v2[1]] and ctx.var[v2[1]] >= v2[3] then
-            core.log.info(">=: ", ctx.var[v2[1]])
             return true
         end
         return false
     end,
     ["<"] = function(v2, ctx)
         if ctx.var[v2[1]] and ctx.var[v2[1]] < v2[3] then
-            core.log.info("<: ", ctx.var[v2[1]])
             return true
         end
         return false
     end,
     ["<="] = function(v2, ctx)
         if ctx.var[v2[1]] and ctx.var[v2[1]] <= v2[3] then
-            core.log.info("<=: ", ctx.var[v2[1]])
             return true
         end
         return false
@@ -244,7 +238,8 @@ local operator_funcs = {
 local function set_upstream(upstream_info, ctx)
     local upstream_val = upstream_info["upstream"]
     local nodes = upstream_val["nodes"]
-    core.log.info("upstream_val['nodes']: ",  core.json.delay_encode(upstream_val["nodes"]))
+    core.log.info("upstream_val['nodes']: ",  
+                    core.json.delay_encode(upstream_val["nodes"]))
 
     local host_port, weight
     for k, v in pairs(nodes) do

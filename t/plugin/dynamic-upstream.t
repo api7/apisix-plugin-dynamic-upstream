@@ -41,20 +41,10 @@ __DATA__
                                         {
                                             "vars": [
                                                 [ "arg_name","==","jack" ],
-                                                [ "http_api-a",">=","26" ],
-                                                [ "http_api-b","~=","hello" ]
+                                                [ "http_user-id",">=","23" ],
+                                                [ "http_apisix-key","~~","[a-z]+" ]
                                             ]
-                                        },
-                                        {
-                                            "vars": [
-                                                ["arg_user_id", "==", "100"]
-                                            ]
-                                        },
-                                        {
-                                            "vars": [
-                                                ["http_apisix", "==", "apisix"]
-                                            ]
-                                        }                       
+                                        }            
                                     ],
                                     "upstreams": [
                                         {
@@ -70,7 +60,7 @@ __DATA__
                                                    "read": 15
                                                }
                                            },
-                                           "weight": 90
+                                           "weight": 50
                                         }
                                     ]
                                 }
@@ -104,8 +94,8 @@ passed
 --- request
 GET /hello?name=jack&user_id=100
 --- more_headers
-api-a: 30
-api-b: hello-123
+user-id: 30 
+apisix-key: hello
 apisix: apisix
 --- error_code: 200
 --- response_body
