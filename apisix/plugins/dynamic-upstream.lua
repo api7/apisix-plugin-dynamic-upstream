@@ -170,7 +170,6 @@ local _M = {
     schema = schema
 }
 
-
 function _M.check_schema(conf)
     local ok, err = core.schema.check(schema, conf)
 
@@ -238,7 +237,7 @@ local operator_funcs = {
 local function set_upstream(upstream_info, ctx)
     local upstream_val = upstream_info["upstream"]
     local nodes = upstream_val["nodes"]
-    core.log.info("upstream_val['nodes']: ",  
+    core.log.info("upstream_val['nodes']: ",
                     core.json.delay_encode(upstream_val["nodes"]))
 
     local host_port, weight
