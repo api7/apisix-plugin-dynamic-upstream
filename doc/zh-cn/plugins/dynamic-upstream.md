@@ -97,6 +97,8 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
 
 插件设置了请求的匹配规则并绑定端口为`1981`的 upstream，route上默认了端口为`1980`的upstream。
 
+注： 当插件中upstreams中的 `weight` 为100时，默认为蓝绿发布。
+
 ## 测试插件
 
 **`match` 校验成功,将40%的请求命中到1981端口的upstream, 60%命中到1980端口的upstream。**
