@@ -18,17 +18,25 @@
 -->
 
 - [English](../../plugins/dynamic-upstream.md)
-  
+
 # 目录
+
   - [目录](#目录)
   - [名字](#名字)
   - [属性](#属性)
   - [如何启用](#如何启用)
+    - [灰度发布](#蓝绿发布)
+    - [蓝绿发布](#蓝绿发布)
+    - [自定义发布](#自定义发布)
   - [测试插件](#测试插件)
+    - [灰度测试](#灰度测试)
+    - [蓝绿测试](#蓝绿测试)
+    - [自定义测试](#自定义测试)
   - [禁用插件](#禁用插件)
 
 
 ## 名字
+
 `dynamic-upstream` 对请求进行条件匹配并按比率切分上游。
 
 ## 属性
@@ -51,7 +59,100 @@
 
 ## 如何启用
 
-在指定的route上启用 `dynamic-pstream` 插件，动态上游请求。
+### 灰度发布
+
+根据插件中 upstreams 部分配置的 weight 值，做流量分流。
+
+```shell
+curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+{
+    "uri": "/index.html",
+    "plugins": {
+        "dynamic-upstream": {
+            "rules": [
+                {
+                    "match": [
+                        {
+                            "vars": [ ]
+                        }            
+                    ],
+                    "upstreams": [
+                        {
+                            "upstream": {
+                                "name": "upstream_A",
+                                "type": "roundrobin",
+                                "nodes": {
+                                    "127.0.0.1:1981":10
+                                },
+                                "timeout": {
+                                    "connect": 15,
+                                    "send": 15,
+                                    "read": 15
+                                }
+                            },
+                            "weight": 40
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "upstream": {
+            "type": "roundrobin",
+            "nodes": {
+                "127.0.0.1:1980": 1
+            }
+    }
+}'
+```
+
+### 蓝绿发布
+
+通过请求头获取蓝绿条件(也可以通过请求参数获取)，将插件 upstreams 的 weight 值设置为100，表示所有请求都命中到该upstrean (当 weight 为`0`时，表示所有请求命中 `route` 上默认的 upstream )。
+
+```shell
+curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+{
+    "uri": "/index.html",
+    "plugins": {
+        "dynamic-upstream": {
+            "rules": [
+                {
+                    "match": [
+                        {
+                            "vars": [
+                                [ "http_new-release","==","blue" ]
+                            ]
+                        }            
+                    ],
+                    "upstreams": [
+                        {
+                            "upstream": {
+                                "name": "upstream_A",
+                                "type": "roundrobin",
+                                "nodes": {
+                                    "127.0.0.1:1981":10
+                                }                                
+                            },
+                            "weight": 100
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "upstream": {
+            "type": "roundrobin",
+            "nodes": {
+                "127.0.0.1:1980": 1
+            }
+    }
+}'
+```
+
+### 自定义发布
+
+`match` 中设置多个匹配规则，并设置 `weight` 值。
 
 ```shell
 curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
@@ -68,7 +169,7 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
                                 [ "http_user-id",">=","23" ],
                                 [ "http_apisix-key","~~","[a-z]+" ]
                             ]
-                        }            
+                        }
                     ],
                     "upstreams": [
                         {
@@ -97,11 +198,44 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
 
 插件设置了请求的匹配规则并绑定端口为`1981`的 upstream，route上默认了端口为`1980`的upstream。
 
-注： 当插件中upstreams中的 `weight` 为100时，默认为蓝绿发布。
-
 ## 测试插件
 
-**`match` 校验成功,将40%的请求命中到1981端口的upstream, 60%命中到1980端口的upstream。**
+### 灰度测试
+
+**将40%的请求命中到1981端口的upstream, 60%命中到1980端口的upstream。**
+
+```shell
+$ curl http://127.0.0.1:9080/index.html -i
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+......
+
+hello 1980
+
+$ curl http://127.0.0.1:9080/index.html -i
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+......
+
+world 1981
+```
+
+### 蓝绿测试
+
+```shell
+$ curl http://127.0.0.1:9080/index.html?name=jack -H 'new-release: blue' -i
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+......
+
+world 1981
+```
+
+`weight` 为 `100` 所有请求都命中到插件配置的 `upstream` 。
+
+### 自定义测试
+
+**`match` 规则校验成功,将40%的请求命中到1981端口的upstream, 60%命中到1980端口的upstream。**
 
 ```shell
 $ curl http://127.0.0.1:9080/index.html?name=jack -H 'user-id:30' -H 'apisix-key: hello' -i
@@ -125,7 +259,8 @@ world 1981
 
 match 校验成功， 命中端口为`1981`的 upstream。
 
-**缺少请求头 `apisix-key`, match` 校验失败`, 响应都为默认 upstream 的数据 `hello 1980`**
+**`match` 规则校验失败(缺少请求头 `apisix-key` ), 响应都为默认 upstream 的数据 `hello 1980`**
+
 ```shell
 $ curl http://127.0.0.1:9080/index.html?name=jack -H 'user-id:30' -i
 HTTP/1.1 200 OK
