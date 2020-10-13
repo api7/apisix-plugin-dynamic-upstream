@@ -21,10 +21,11 @@
 
 # 目录
 
+  - [目录](#目录)
   - [名字](#名字)
   - [属性](#属性)
   - [如何启用](#如何启用)
-    - [灰度发布](#蓝绿发布)
+    - [灰度发布](#灰度发布)
     - [蓝绿发布](#蓝绿发布)
     - [自定义发布](#自定义发布)
   - [测试插件](#测试插件)
@@ -60,7 +61,7 @@
 
 ### 灰度发布
 
-根据插件中 upstreams 部分配置的 weight 值，做流量分流。
+根据插件中 upstreams 部分配置的 weight 值，做 `roundrobin` 算法命中到对应 upstream。
 
 ```shell
 curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
@@ -70,26 +71,29 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
         "dynamic-upstream": {
             "rules": [
                 {
-                    "match": [
-                        {
-                            "vars": [ ]
-                        }            
-                    ],
                     "upstreams": [
                         {
                             "upstream": {
                                 "name": "upstream_A",
                                 "type": "roundrobin",
                                 "nodes": {
-                                    "127.0.0.1:1981":10
-                                },
-                                "timeout": {
-                                    "connect": 15,
-                                    "send": 15,
-                                    "read": 15
+                                    "127.0.0.1:1981":20
                                 }
                             },
-                            "weight": 40
+                            "weight": 2
+                        },
+                        {
+                            "upstream": {
+                                "name": "upstream_B",
+                                "type": "roundrobin",
+                                "nodes": {
+                                    "127.0.0.1:1982":10
+                                }
+                            },
+                            "weight": 1
+                        },
+                        {
+                            "weight": 1
                         }
                     ]
                 }
@@ -105,9 +109,11 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
 }'
 ```
 
+配置 `match` 为空， `upstreams` 中具有三个节点信息，前两个节点表示 `1981` 和 `1982` 端口的上游，最后一个表示命中 `route` 上默认上游的权重值(如果没有该节点，表示都不会命中默认的上游)。
+
 ### 蓝绿发布
 
-通过请求头获取蓝绿条件(也可以通过请求参数获取)，将插件 upstreams 的 weight 值设置为100，表示所有请求都命中到该upstrean (当 weight 为`0`时，表示所有请求命中 `route` 上默认的 upstream )。
+通过请求头获取蓝绿条件(也可以通过请求参数获取)，在插件中配置一个上游节点(match 可有可无)。若 `match` 不为空，则对 match 规则进行校验；通过就命中插件配置的上游；失败就命中 `route` 上默认的上游，`match` 为空直接命中插件配置的上游。
 
 ```shell
 curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
@@ -122,7 +128,7 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
                             "vars": [
                                 [ "http_new-release","==","blue" ]
                             ]
-                        }            
+                        }
                     ],
                     "upstreams": [
                         {
@@ -131,9 +137,9 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
                                 "type": "roundrobin",
                                 "nodes": {
                                     "127.0.0.1:1981":10
-                                }                                
+                                }
                             },
-                            "weight": 100
+                            "weight": 1
                         }
                     ]
                 }
@@ -151,7 +157,7 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
 
 ### 自定义发布
 
-`match` 中设置多个匹配规则，并设置 `weight` 值。
+插件 `match` 中设置多个匹配规则(vars中的规则是 `and` 关系，多个 `vars` 间是 `or` 关系)，并设置 `weight` 值。如果 `match` 规则校验失败，则命中 `route` 上默认的上游。
 
 ```shell
 curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
@@ -176,10 +182,23 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
                                 "name": "upstream_A",
                                 "type": "roundrobin",
                                 "nodes": {
-                                    "127.0.0.1:1981":10
+                                    "127.0.0.1:1981":20
                                 }
                             },
-                            "weight": 40
+                            "weight": 2
+                        },
+                        {
+                            "upstream": {
+                                "name": "upstream_B",
+                                "type": "roundrobin",
+                                "nodes": {
+                                    "127.0.0.1:1982":10
+                                }
+                            },
+                            "weight": 1
+                        },
+                        {
+                            "weight": 1
                         }
                     ]
                 }
@@ -195,28 +214,44 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
 }'
 ```
 
-插件设置了请求的匹配规则并绑定端口为`1981`的 upstream，route上默认了端口为`1980`的upstream。
+注：插件 `upstreams` 中的第三个节点只有 `weight` 值，表示 `route` 上默认 upstream 的权重值。
 
 ## 测试插件
 
 ### 灰度测试
 
-**将40%的请求命中到1981端口的upstream, 60%命中到1980端口的upstream。**
+**根据 `weight` 值做 `roundrobin` 算法选择对应 `upstream`。**
+
+分别对 `/index.html` 发起4次请求：
 
 ```shell
-$ curl http://127.0.0.1:9080/index.html -i
+$ curl http://127.0.0.1:9080/index.html
 HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
 ......
 
-hello 1980
+1981
 
-$ curl http://127.0.0.1:9080/index.html -i
+$ curl http://127.0.0.1:9080/index.html
 HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
 ......
 
-world 1981
+1981
+
+$ curl http://127.0.0.1:9080/index.html
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+......
+
+1980
+
+$ curl http://127.0.0.1:9080/index.html
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+......
+
+1982
 ```
 
 ### 蓝绿测试
@@ -234,7 +269,9 @@ world 1981
 
 ### 自定义测试
 
-**`match` 规则校验成功,将40%的请求命中到1981端口的upstream, 60%命中到1980端口的upstream。**
+**`match` 规则校验通过, 根据 `weight` 值做 `roundrobin` 算法选择对应 `upstream`。**
+
+分别对 `/index.html` 发起4次请求：
 
 ```shell
 $ curl http://127.0.0.1:9080/index.html?name=jack -H 'user-id:30' -H 'apisix-key: hello' -i
@@ -242,10 +279,8 @@ HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
 ......
 
-hello 1980
+1981
 ```
-
-match 校验成功，但是命中默认端口为`1980`的 upstream。
 
 ```shell
 $ curl http://127.0.0.1:9080/index.html?name=jack -H 'user-id:30' -H 'apisix-key: hello' -i
@@ -253,12 +288,34 @@ HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
 ......
 
-world 1981
+1981
 ```
 
-match 校验成功， 命中端口为`1981`的 upstream。
+命中两次 `1980` 端口的 upstream 。
 
-**`match` 规则校验失败(缺少请求头 `apisix-key` ), 响应都为默认 upstream 的数据 `hello 1980`**
+```shell
+$ curl http://127.0.0.1:9080/index.html?name=jack -H 'user-id:30' -H 'apisix-key: hello' -i
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+......
+
+1980
+```
+
+命中一次 `1981` 端口的 upstream 。
+
+```shell
+$ curl http://127.0.0.1:9080/index.html?name=jack -H 'user-id:30' -H 'apisix-key: hello' -i
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+......
+
+1982
+```
+
+命中一次 `1982` 端口的 upstream 。
+
+**`match` 规则校验失败(缺少请求头 `apisix-key` ), 直接命中默认 upstream ( `route` 上配置的 upstream **
 
 ```shell
 $ curl http://127.0.0.1:9080/index.html?name=jack -H 'user-id:30' -i
@@ -266,7 +323,7 @@ HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
 ......
 
-hello 1980
+1980
 ```
 
 ## 禁用插件
@@ -286,4 +343,3 @@ $ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f
     }
 }'
 ```
-

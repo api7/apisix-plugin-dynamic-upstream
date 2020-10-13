@@ -14,18 +14,16 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
-local core     = require("apisix.core")
-local upstream = require("apisix.upstream")
-local ngx_re   = require("ngx.re")
+local core       = require("apisix.core")
+local upstream   = require("apisix.upstream")
+local ngx_re     = require("ngx.re")
 local roundrobin = require("resty.roundrobin")
-local re_find  = ngx.re.find
-local math     = math
+local re_find    = ngx.re.find
+local math       = math
 
-local up_info = {}
 local lrucache_rr_obj = core.lrucache.new({
     ttl = 0, count = 512,
 })
-
 
 -- schema of match part
 local option_def = {
@@ -87,7 +85,8 @@ local match_def = {
                 }
             }
         }
-    }
+    },
+    default = {{ vars = {{"empty", "==", "empty"}}}}
 }
 
 -- schema of upstreams part
@@ -143,13 +142,12 @@ local upstreams_def = {
             upstream = upstream_def,
             weight = {
                 type = "integer",
-                default = 100,
-                minimum = 0,
-                maximum = 100
+                default = 1,
+                minimum = 0
             }
         }
     },
-    minItems = 0,
+    minItems = 1,
     maxItems = 20
 }
 
@@ -189,52 +187,50 @@ function _M.check_schema(conf)
 end
 
 
-local function generate_random_num(max_val)
-    local random_val = math.random(1,max_val)
-    return random_val
-end
-
-
 local operator_funcs = {
-    ["=="] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] == v2[3] then
+    ["=="] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] == var[3] then
             return true
         end
         return false
     end,
-    ["~="] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] ~= v2[3] then
+    ["~="] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] ~= var[3] then
             return true
         end
         return false
     end,
-    ["~~"] = function(v2, ctx)
-        local from = re_find(ctx.var[v2[1]], v2[3], "jo")
+    ["~~"] = function(var, ctx)
+        if not ctx.var[var[1]] then
+            return false
+        end
+
+        local from = re_find(ctx.var[var[1]], var[3], "jo")
         if from then
             return true
         end
         return false
     end,
-    [">"] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] > v2[3] then
+    [">"] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] > var[3] then
             return true
         end
         return false
     end,
-    [">="] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] >= v2[3] then
+    [">="] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] >= var[3] then
             return true
         end
         return false
     end,
-    ["<"] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] < v2[3] then
+    ["<"] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] < var[3] then
             return true
         end
         return false
     end,
-    ["<="] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] <= v2[3] then
+    ["<="] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] <= var[3] then
             return true
         end
         return false
@@ -245,9 +241,9 @@ local operator_funcs = {
 local function set_upstream(upstream_info, ctx)
     local nodes = upstream_info["nodes"]
     local host_port, weight
-    for k, v in pairs(nodes) do
-        host_port = k
-        weight = v
+    for h_p, w in pairs(nodes) do
+        host_port = h_p
+        weight = w
     end
 
     local host_port_array = ngx_re.split(host_port, ":")
@@ -282,61 +278,69 @@ local function set_upstream(upstream_info, ctx)
 end
 
 
-local function new_rr_obj(up_info)
+local function new_rr_obj(upstreams)
     local server_list = {}
-    for i = 1, #up_info, 2 do
-        server_list[tostring(i+1)] = up_info[i]
-        core.log.info("tostring(i+1): ", i+1, "up_info-weight: ", up_info[i])
+    for i, upstream_obj in ipairs(upstreams) do
+        if not upstream_obj.upstream then
+            upstream_obj.upstream = "empty_upstream"
+        end
+        server_list[upstream_obj.upstream] = upstream_obj.weight
     end
-    core.log.info("server_list: ", core.json.encode(server_list))
 
     return roundrobin:new(server_list)
 end
 
 
 function _M.access(conf, ctx)
-    local upstreams_info = {}
+    local upstreams
     local match_flag
-    for _, v in pairs(conf.rules) do
-        upstreams_info = v.upstreams
-        for _, v1 in pairs(v.match) do
-            match_flag = true
-            for _, v2 in pairs(v1.vars) do
-                local val = operator_funcs[v2[2]](v2, ctx)
-                core.log.info("val: ", val)
-                if not val then
+    for _, rule in pairs(conf.rules) do
+        match_flag = true
+        for _, single_match in pairs(rule.match) do
+            for _, var in pairs(single_match.vars) do
+                -- match is empty
+                local l_v, op, r_v = var[1], var[2], var[3]
+                if l_v == r_v then
+                    break
+                end
+
+                -- match is not empty
+                local ok = operator_funcs[op](var, ctx)
+                core.log.info("ok: ", ok)
+                if not ok then
                     core.log.info("match check faild.")
-                    match_flag = val
+                    match_flag = false
                     break
                 end
             end
+
             if match_flag then
                 break
             end
+        end
+
+        if match_flag then
+            upstreams = rule.upstreams
+            break
         end
     end
 
     core.log.info("match_flag: ", match_flag)
 
-    if match_flag then
-        local i = 1
-        for _, ups_v in pairs(upstreams_info) do
-            up_info[i] = ups_v["weight"]
-            up_info[i+1] = ups_v
-            i = i + 2
-        end
+    if not match_flag then
+        return
+    end
 
-        core.log.info("up_info: ", core.json.delay_encode(up_info))
+    local rr_up, err = lrucache_rr_obj(upstreams, nil, new_rr_obj, upstreams)
+    if not rr_up then
+        core.log.error("lrucache_rr_obj faild: ", err)
+        return 500
+    end
 
-        local rr_up = lrucache_rr_obj(up_info, nil, new_rr_obj, up_info)
-        local up_info_index = rr_up:find()
-        if up_info[tonumber(up_info_index)]["upstream"] then
-            core.log.info("upstream-xxx: ",
-                            core.json.delay_encode(up_info[tonumber(up_info_index)]["upstream"]))
-            return set_upstream(up_info[tonumber(up_info_index)]["upstream"], ctx)
-        else
-            return
-        end
+    local upstream = rr_up:find()
+    if upstream and upstream ~= "empty_upstream" then
+        core.log.info("upstream: ", core.json.encode(upstream))
+        return set_upstream(upstream, ctx)
     end
 
     return
