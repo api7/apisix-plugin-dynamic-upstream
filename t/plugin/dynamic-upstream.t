@@ -41,42 +41,40 @@ __DATA__
                                     "match": [
                                         {
                                             "vars": [
-                                                [ "arg_name","==","jack" ],
-                                                [ "http_user-id",">=","23" ],
-                                                [ "http_apisix-key","~~","[a-z]+" ]
+                                                [ "arg_name","==","jack" ]                                            
                                             ]
-                                        }            
+                                        }                            
                                     ],
                                     "upstreams": [
                                         {
                                            "upstream": {
-                                               "name": "upstream_A",
-                                               "type": "roundrobin",
-                                               "nodes": {
+                                                "name": "upstream_A",
+                                                "type": "roundrobin",
+                                                "nodes": {
                                                    "127.0.0.1:1981":20
-                                               },
-                                               "timeout": {
-                                                   "connect": 15,
-                                                   "send": 15,
-                                                   "read": 15
-                                               }
-                                           },
-                                           "weight": 2
+                                                },
+                                                "timeout": {
+                                                    "connect": 15,
+                                                    "send": 15,
+                                                    "read": 15
+                                                }
+                                            },
+                                            "weight": 2
                                         },
                                         {
                                            "upstream": {
-                                               "name": "upstream_B",
-                                               "type": "roundrobin",
-                                               "nodes": {
+                                                "name": "upstream_B",
+                                                "type": "roundrobin",
+                                                "nodes": {
                                                    "127.0.0.1:1982":10
-                                               },
-                                               "timeout": {
-                                                   "connect": 15,
-                                                   "send": 15,
-                                                   "read": 15
-                                               }
-                                           },
-                                           "weight": 1
+                                                },
+                                                "timeout": {
+                                                    "connect": 15,
+                                                    "send": 15,
+                                                    "read": 15
+                                                }
+                                            },
+                                            "weight": 1
                                         },
                                         {
                                             "weight": 1
@@ -94,7 +92,6 @@ __DATA__
                     }                    
                 }]]
                 )
-
             ngx.status = code
             ngx.say(body)
         }
@@ -108,28 +105,32 @@ passed
 
 
 
-=== TEST 2: sanity
---- pipelined_requests eval
-["GET /server_port?name=jack", "GET /server_port?name=jack", "GET /server_port?name=jack", "GET /server_port?name=jack"]
---- more_headers
-user-id: 30 
-apisix-key: hello
---- error_code eval
-[200, 200, 200, 200]
---- response_body eval
-["1981", "1981", "1980", "1982"]
+=== TEST 2: match verification passed and initiated multiple requests
+--- config
+location /t {
+    content_by_lua_block {
+        local t = require("lib.test_admin").test
+        local bodys = {}
+        for i = 1, 8 do
+            local _, _, body = t('/server_port?name=jack', ngx.HTTP_GET)
+            bodys[i] = body
+        end
+        table.sort(bodys)
+        ngx.say(table.concat(bodys, ", "))
+    }
+}
+--- request
+GET /t
+--- response_body
+1980, 1980, 1981, 1981, 1981, 1981, 1982, 1982
 --- no_error_log
 [error]
 
 
 
-=== TEST 3: match faild
+=== TEST 3: match verification failed
 --- request
 GET /server_port?name=james
---- more_headers
-user-id: 30 
-apisix-key: hello
---- error_code: 200
 --- response_body eval
 1980
 --- no_error_log
