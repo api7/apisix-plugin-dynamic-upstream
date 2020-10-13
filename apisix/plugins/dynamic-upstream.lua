@@ -17,8 +17,15 @@
 local core     = require("apisix.core")
 local upstream = require("apisix.upstream")
 local ngx_re   = require("ngx.re")
+local roundrobin = require("resty.roundrobin")
 local re_find  = ngx.re.find
 local math     = math
+
+local up_info = {}
+local lrucache_rr_obj = core.lrucache.new({
+    ttl = 0, count = 512,
+})
+
 
 -- schema of match part
 local option_def = {
@@ -136,13 +143,14 @@ local upstreams_def = {
             upstream = upstream_def,
             weight = {
                 type = "integer",
+                default = 100,
                 minimum = 0,
                 maximum = 100
             }
         }
     },
     minItems = 0,
-    maxItems = 1
+    maxItems = 20
 }
 
 local schema = {
@@ -181,8 +189,8 @@ function _M.check_schema(conf)
 end
 
 
-local function generate_random_num()
-    local random_val = math.random(1,100)
+local function generate_random_num(max_val)
+    local random_val = math.random(1,max_val)
     return random_val
 end
 
@@ -235,17 +243,12 @@ local operator_funcs = {
 
 
 local function set_upstream(upstream_info, ctx)
-    local upstream_val = upstream_info["upstream"]
-    local nodes = upstream_val["nodes"]
-    core.log.info("upstream_val['nodes']: ",
-                    core.json.delay_encode(upstream_val["nodes"]))
-
+    local nodes = upstream_info["nodes"]
     local host_port, weight
     for k, v in pairs(nodes) do
         host_port = k
         weight = v
     end
-    core.log.info("host_port: ", host_port, " weight: ", weight)
 
     local host_port_array = ngx_re.split(host_port, ":")
     local host = host_port_array[1]
@@ -256,11 +259,12 @@ local function set_upstream(upstream_info, ctx)
     else
         port = tonumber(port)
     end
+
     core.log.info("host: ", host, " port: ", port)
 
     local up_conf = {
-        name = upstream_val["name"],
-        type = upstream_val["type"],
+        name = upstream_info["name"],
+        type = upstream_info["type"],
         nodes = {
             {host = host, port = port, weight = weight}
         }
@@ -278,12 +282,23 @@ local function set_upstream(upstream_info, ctx)
 end
 
 
-function _M.access(conf, ctx)
-    local upstream_info = {}
-    local match_flag
+local function new_rr_obj(up_info)
+    local server_list = {}
+    for i = 1, #up_info, 2 do
+        server_list[tostring(i+1)] = up_info[i]
+        core.log.info("tostring(i+1): ", i+1, "up_info-weight: ", up_info[i])
+    end
+    core.log.info("server_list: ", core.json.encode(server_list))
 
+    return roundrobin:new(server_list)
+end
+
+
+function _M.access(conf, ctx)
+    local upstreams_info = {}
+    local match_flag
     for _, v in pairs(conf.rules) do
-        upstream_info = v.upstreams[1]
+        upstreams_info = v.upstreams
         for _, v1 in pairs(v.match) do
             match_flag = true
             for _, v2 in pairs(v1.vars) do
@@ -304,14 +319,23 @@ function _M.access(conf, ctx)
     core.log.info("match_flag: ", match_flag)
 
     if match_flag then
-        core.log.info("upstream_info: ", core.json.delay_encode(upstream_info))
+        local i = 1
+        for _, ups_v in pairs(upstreams_info) do
+            up_info[i] = ups_v["weight"]
+            up_info[i+1] = ups_v
+            i = i + 2
+        end
 
-        local w = upstream_info["weight"]
-        local random_val = generate_random_num()
-        core.log.info("random_val: ",random_val ," w: ", w)
+        core.log.info("up_info: ", core.json.delay_encode(up_info))
 
-        if random_val <= w then
-            return set_upstream(upstream_info, ctx)
+        local rr_up = lrucache_rr_obj(up_info, nil, new_rr_obj, up_info)
+        local up_info_index = rr_up:find()
+        if up_info[tonumber(up_info_index)]["upstream"] then
+            core.log.info("upstream-xxx: ",
+                            core.json.delay_encode(up_info[tonumber(up_info_index)]["upstream"]))
+            return set_upstream(up_info[tonumber(up_info_index)]["upstream"], ctx)
+        else
+            return
         end
     end
 

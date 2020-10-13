@@ -25,7 +25,7 @@ run_tests;
 
 __DATA__
 
-=== TEST 1: route binding routex plugin
+=== TEST 1: configure the dynamic-upstream plugin
 --- config
     location /t {
         content_by_lua_block {
@@ -33,6 +33,7 @@ __DATA__
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
                 [[{
+                    "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
@@ -52,7 +53,7 @@ __DATA__
                                                "name": "upstream_A",
                                                "type": "roundrobin",
                                                "nodes": {
-                                                   "127.0.0.1:1981":10
+                                                   "127.0.0.1:1981":20
                                                },
                                                "timeout": {
                                                    "connect": 15,
@@ -60,7 +61,25 @@ __DATA__
                                                    "read": 15
                                                }
                                            },
-                                           "weight": 50
+                                           "weight": 2
+                                        },
+                                        {
+                                           "upstream": {
+                                               "name": "upstream_B",
+                                               "type": "roundrobin",
+                                               "nodes": {
+                                                   "127.0.0.1:1982":10
+                                               },
+                                               "timeout": {
+                                                   "connect": 15,
+                                                   "send": 15,
+                                                   "read": 15
+                                               }
+                                           },
+                                           "weight": 1
+                                        },
+                                        {
+                                            "weight": 1
                                         }
                                     ]
                                 }
@@ -72,8 +91,7 @@ __DATA__
                             "nodes": {
                                 "127.0.0.1:1980": 1
                             }
-                    },
-                    "uri": "/hello"
+                    }                    
                 }]]
                 )
 
@@ -90,15 +108,29 @@ passed
 
 
 
-=== TEST 2: test routex plugin
---- request
-GET /hello?name=jack&user_id=100
+=== TEST 2: sanity
+--- pipelined_requests eval
+["GET /server_port?name=jack", "GET /server_port?name=jack", "GET /server_port?name=jack", "GET /server_port?name=jack"]
 --- more_headers
 user-id: 30 
 apisix-key: hello
-apisix: apisix
+--- error_code eval
+[200, 200, 200, 200]
+--- response_body eval
+["1981", "1981", "1980", "1982"]
+--- no_error_log
+[error]
+
+
+
+=== TEST 3: match faild
+--- request
+GET /server_port?name=james
+--- more_headers
+user-id: 30 
+apisix-key: hello
 --- error_code: 200
---- response_body
-hello world
+--- response_body eval
+1980
 --- no_error_log
 [error]
