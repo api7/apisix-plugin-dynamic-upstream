@@ -25,7 +25,7 @@ run_tests;
 
 __DATA__
 
-=== TEST 1: route binding dynamic-upstream plugin
+=== TEST 1: configure the dynamic-upstream plugin
 --- config
     location /t {
         content_by_lua_block {
@@ -33,7 +33,7 @@ __DATA__
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
                 [[{
-                    "uri": "/hello",
+                    "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
@@ -110,14 +110,14 @@ passed
 
 === TEST 2: sanity
 --- pipelined_requests eval
-["GET /hello?name=jack", "GET /hello?name=jack", "GET /hello?name=jack", "GET /hello?name=jack"]
+["GET /server_port?name=jack", "GET /server_port?name=jack", "GET /server_port?name=jack", "GET /server_port?name=jack"]
 --- more_headers
 user-id: 30 
 apisix-key: hello
 --- error_code eval
-[200, 200, 200, 200, 200]
+[200, 200, 200, 200]
 --- response_body eval
-["hello world\n", "hello world\n", "hello world\n", "hello world\n"]
+["1981", "1981", "1980", "1982"]
 --- no_error_log
 [error]
 
@@ -125,12 +125,12 @@ apisix-key: hello
 
 === TEST 3: match faild
 --- request
-GET /hello?name=james
+GET /server_port?name=james
 --- more_headers
 user-id: 30 
 apisix-key: hello
 --- error_code: 200
---- response_body
-hello world
+--- response_body eval
+1980
 --- no_error_log
 [error]
