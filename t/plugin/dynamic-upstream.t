@@ -25,7 +25,7 @@ run_tests;
 
 __DATA__
 
-=== TEST 1: missing `match` rule
+=== TEST 1: configure the dynamic-upstream plugin
 --- config
     location /t {
         content_by_lua_block {
@@ -41,13 +41,33 @@ __DATA__
                                     "upstreams": [
                                         {
                                            "upstream": {
-                                               "name": "upstream_A",
-                                               "type": "roundrobin",
-                                               "nodes": {
+                                                "name": "upstream_A",
+                                                "type": "roundrobin",
+                                                "nodes": {
                                                    "127.0.0.1:1981":20
-                                               }
-                                           },
-                                           "weight": 2
+                                                },
+                                                "timeout": {
+                                                    "connect": 15,
+                                                    "send": 15,
+                                                    "read": 15
+                                                }
+                                            },
+                                            "weight": 2
+                                        },
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_B",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1982":10
+                                                },
+                                                "timeout": {
+                                                    "connect": 15,
+                                                    "send": 15,
+                                                    "read": 15
+                                                }
+                                            },
+                                            "weight": 1
                                         },
                                         {
                                             "weight": 1
@@ -65,7 +85,6 @@ __DATA__
                     }                    
                 }]]
                 )
-
             ngx.status = code
             ngx.say(body)
         }
@@ -79,105 +98,23 @@ passed
 
 
 
-=== TEST 2: multiple requests
---- pipelined_requests eval
-["GET /server_port?name=jack", "GET /server_port?name=jack", "GET /server_port?name=jack"]
---- more_headers
-user-id: 30 
-apisix-key: hello
---- response_body eval
-["1981", "1981", "1980"]
---- no_error_log
-[error]
-
-
-
-=== TEST 3: configure `match` rules
+=== TEST 2: initiated multiple requests
 --- config
-    location /t {
-        content_by_lua_block {
-            local t = require("lib.test_admin").test
-            local code, body = t('/apisix/admin/routes/1',
-                ngx.HTTP_PUT,
-                [[{
-                    "uri": "/server_port",
-                    "plugins": {
-                        "dynamic-upstream": {
-                            "rules": [
-                                {
-                                    "match": [
-                                        {
-                                            "vars": [
-                                                [ "arg_name","==","jack" ],
-                                                [ "http_user-id",">=","23" ],
-                                                [ "http_apisix-key","~~","[a-z]+" ]
-                                            ]
-                                        }            
-                                    ],
-                                    "upstreams": [
-                                        {
-                                           "upstream": {
-                                               "name": "upstream_A",
-                                               "type": "roundrobin",
-                                               "nodes": {
-                                                   "127.0.0.1:1981":20
-                                               },
-                                               "timeout": {
-                                                   "connect": 15,
-                                                   "send": 15,
-                                                   "read": 15
-                                               }
-                                           },
-                                           "weight": 2
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    },
-                    "upstream": {
-                            "type": "roundrobin",
-                            "nodes": {
-                                "127.0.0.1:1980": 1
-                            }
-                    }                    
-                }]]
-                )
-
-            ngx.status = code
-            ngx.say(body)
-        }
+location /t {
+    content_by_lua_block {
+        local t = require("lib.test_admin").test
+        local bodys = {}
+        for i = 1, 8 do
+            local _, _, body = t('/server_port?name=jack', ngx.HTTP_GET)
+            bodys[i] = body
+        end
+        table.sort(bodys)
+        ngx.say(table.concat(bodys, ", "))
     }
+}
 --- request
 GET /t
 --- response_body
-passed
---- no_error_log
-[error]
-
-
-
-=== TEST 4: match verification passed
---- pipelined_requests eval
-["GET /server_port?name=jack", "GET /server_port?name=jack"]
---- more_headers
-user-id: 30 
-apisix-key: hello
---- response_body eval
-["1981", "1981"]
---- no_error_log
-[error]
-
-
-
-=== TEST 5: match verification failed
---- request
-GET /server_port?name=james
---- more_headers
-user-id: 30 
-apisix-key: hello
---- error_code: 200
---- response_body eval
-1980
+1980, 1980, 1981, 1981, 1981, 1981, 1982, 1982
 --- no_error_log
 [error]

@@ -241,9 +241,9 @@ local operator_funcs = {
 local function set_upstream(upstream_info, ctx)
     local nodes = upstream_info["nodes"]
     local host_port, weight
-    for h_p, w in pairs(nodes) do
-        host_port = h_p
-        weight = w
+    for node_h_p, node_w in pairs(nodes) do
+        host_port = node_h_p
+        weight = node_w
     end
 
     local host_port_array = ngx_re.split(host_port, ":")
