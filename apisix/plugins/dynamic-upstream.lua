@@ -333,7 +333,7 @@ function _M.access(conf, ctx)
 
     local rr_up, err = lrucache_rr_obj(upstreams, nil, new_rr_obj, upstreams)
     if not rr_up then
-        core.log.error("lrucache_rr_obj faild: ", err)
+        core.log.error("failed to lrucache_rr_obj: ", err)
         return 500
     end
 
