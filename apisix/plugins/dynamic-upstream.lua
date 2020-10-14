@@ -306,8 +306,8 @@ function _M.access(conf, ctx)
         for _, single_match in pairs(rule.match) do
             for _, var in pairs(single_match.vars) do
                 -- match is empty
-                local l_v, op, r_v = var[1], var[2], var[3]
-                if l_v == r_v then
+                local req_v, op, def_v = var[1], var[2], var[3]
+                if req_v == def_v then
                     break
                 end
 
