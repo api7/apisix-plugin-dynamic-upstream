@@ -85,7 +85,8 @@ local match_def = {
                 }
             }
         }
-    }
+    },
+    default = {{ vars = {{"server_port", ">", "0"}}}}
 }
 
 -- schema of upstreams part
@@ -141,13 +142,12 @@ local upstreams_def = {
             upstream = upstream_def,
             weight = {
                 type = "integer",
-                default = 100,
+                default = 1,
                 minimum = 0,
-                maximum = 100
             }
         }
     },
-    minItems = 0,
+    minItems = 1,
     maxItems = 20
 }
 
@@ -305,11 +305,12 @@ function _M.access(conf, ctx)
         core.log.info("conf.rules: ", core.json.encode(conf.rules))
         for _, single_match in pairs(rule.match) do
             for _, var in pairs(single_match.vars) do
+                -- var example: ["http_name", "==", "rose"]
                 local op = var[2]
                 local ok = operator_funcs[op](var, ctx)
                 core.log.info("ok: ", ok)
                 if not ok then
-                    core.log.info("match check faild.")
+                    core.log.info("var comparison result is false.")
                     match_flag = false
                     break
                 end
