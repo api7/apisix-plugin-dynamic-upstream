@@ -207,7 +207,7 @@ local operator_funcs = {
         return false
     end,
     ["~~"] = function(v2, ctx)
-        if not ctx.var[var[1]] then
+        if not ctx.var[v2[1]] then
             return false
         end
 
