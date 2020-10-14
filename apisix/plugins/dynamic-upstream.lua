@@ -305,12 +305,12 @@ function _M.access(conf, ctx)
         core.log.info("conf.rules: ", core.json.encode(conf.rules))
         for _, single_match in pairs(rule.match) do
             for _, var in pairs(single_match.vars) do
-                -- e.g: ["http_name", "==", "rose"], `op` is equal to "=="
+                -- var example: ["http_name", "==", "rose"]
                 local op = var[2]
                 local ok = operator_funcs[op](var, ctx)
                 core.log.info("ok: ", ok)
                 if not ok then
-                    core.log.info("match verification failed.")
+                    core.log.info("var comparison result is false.")
                     match_flag = false
                     break
                 end
