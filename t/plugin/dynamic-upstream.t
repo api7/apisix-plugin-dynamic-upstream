@@ -280,7 +280,7 @@ GET /server_port?name=1234
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
                 [[{
-                    "uri": "/index.html",
+                    "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
@@ -307,41 +307,6 @@ GET /server_port?name=1234
                             "127.0.0.1:1980": 1
                         }
                     }                    
-                }]],
-                [[{
-                    "node": {
-                        "value": {
-                            "uri": "/index.html",
-                            "plugins": {
-                                "dynamic-upstream": {
-                                    "rules":[
-                                        {
-                                            "match":[
-                                                {
-                                                    "vars":[
-                                                        ["empty", "==", "empty" ]
-                                                    ]
-                                                }
-                                            ],
-                                            "upstreams":[
-                                                {
-                                                    "upstream":{
-                                                        "name":"upstream_A",
-                                                        "nodes":{
-                                                            "127.0.0.1:1981":20
-                                                        },
-                                                        "type":"roundrobin"
-                                                    },
-                                                    "weight":1
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            }
-                        }
-                    },
-                    "action": "set"
                 }]]
                 )
             ngx.status = code
@@ -352,5 +317,15 @@ GET /server_port?name=1234
 GET /t
 --- response_body
 passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 7: send a request to empty match configuration
+--- request
+GET /server_port
+--- response_body eval  
+1981
 --- no_error_log
 [error]

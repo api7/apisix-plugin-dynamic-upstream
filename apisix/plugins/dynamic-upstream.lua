@@ -86,7 +86,7 @@ local match_def = {
             }
         }
     },
-    default = {{ vars = {{"empty", "==", "empty"}}}}
+    default = {{ vars = {{"server_port", ">", "0"}}}}
 }
 
 -- schema of upstreams part
@@ -305,13 +305,8 @@ function _M.access(conf, ctx)
         core.log.info("conf.rules: ", core.json.encode(conf.rules))
         for _, single_match in pairs(rule.match) do
             for _, var in pairs(single_match.vars) do
-                -- match is empty
-                local req_v, op, def_v = var[1], var[2], var[3]
-                if req_v == def_v then
-                    break
-                end
-
-                -- match is not empty
+                -- e.g: ["http_name", "==", "rose"], `op` is equal to "=="
+                local op = var[2]
                 local ok = operator_funcs[op](var, ctx)
                 core.log.info("ok: ", ok)
                 if not ok then
