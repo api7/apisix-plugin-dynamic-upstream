@@ -207,6 +207,10 @@ local operator_funcs = {
         return false
     end,
     ["~~"] = function(v2, ctx)
+        if not ctx.var[v2[1]] then
+            return false
+        end
+
         local from = re_find(ctx.var[v2[1]], v2[3], "jo")
         if from then
             return true
