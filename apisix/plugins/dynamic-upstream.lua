@@ -18,19 +18,13 @@ local core       = require("apisix.core")
 local upstream   = require("apisix.upstream")
 local ngx_re     = require("ngx.re")
 local roundrobin = require("resty.roundrobin")
+local ipmatcher  = require("resty.ipmatcher")
 local re_find    = ngx.re.find
 local math       = math
-local ipmatcher     = require("resty.ipmatcher")
 
 local lrucache_rr_obj = core.lrucache.new({
     ttl = 0, count = 512,
 })
-
--- local dns_resolver
--- local function parse_args(args)
---     dns_resolver = args and args["dns_resolver"]
---     core.log.info("dns resolver", core.json.delay_encode(dns_resolver, true))
--- end
 
 -- schema of match part
 local option_def = {
