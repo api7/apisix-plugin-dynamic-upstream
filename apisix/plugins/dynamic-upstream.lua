@@ -301,13 +301,14 @@ local function set_upstream(upstream_info, ctx)
     end
 
     local domain_ip, port = split_host_port(host_port)
-    local host = parse_domain_for_nodes(domain_ip)
+    local ip = parse_domain_for_nodes(domain_ip)
+    ctx.var.upstream_host = domain_ip
 
     local up_conf = {
         name = upstream_info["name"],
         type = upstream_info["type"],
         nodes = {
-            {host = host, port = port, weight = weight}
+            {host = ip, port = port, weight = weight}
         }
     }
 
