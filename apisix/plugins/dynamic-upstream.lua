@@ -188,6 +188,7 @@ end
 
 
 local operator_funcs = {
+    -- var value example: ["http_name", "==", "rose"]
     ["=="] = function(var, ctx)
         if ctx.var[var[1]] and ctx.var[var[1]] == var[3] then
             return true
@@ -241,9 +242,9 @@ local operator_funcs = {
 local function set_upstream(upstream_info, ctx)
     local nodes = upstream_info["nodes"]
     local host_port, weight
-    for node_h_p, node_w in pairs(nodes) do     -- TODO: support multiple nodes
-        host_port = node_h_p
-        weight = node_w
+    for k, v in pairs(nodes) do     -- TODO: support multiple nodes
+        host_port = k
+        weight    = v
     end
 
     local host_port_array = ngx_re.split(host_port, ":")
