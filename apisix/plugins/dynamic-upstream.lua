@@ -104,7 +104,7 @@ local upstream_def = {
             },
             default = "roundrobin"
         },
-        nodes = { type = "object" , maxItems = 1},
+        nodes = { type = "object" },
         timeout = { type = "object" },
         enable_websocket = { type = "boolean" },
         pass_host = {
