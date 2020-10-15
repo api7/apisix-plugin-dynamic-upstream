@@ -293,10 +293,10 @@ end
 local function set_upstream(upstream_info, ctx)
     local nodes = upstream_info["nodes"]
     local host_port, weight
-    -- l_v means left value, r_v means right value
-    for l_v, r_v in pairs(nodes) do    -- TODO: support multiple nodes
-        host_port = l_v
-        weight = r_v
+    -- h means host:port, w means weight
+    for h, w in pairs(nodes) do    -- TODO: support multiple nodes
+        host_port = h
+        weight = w
     end
 
     local host, port = split_host_port(host_port)
