@@ -71,7 +71,32 @@ local option_def = {
         },
         minItems = 0,
         maxItems = 10
-    }
+    },
+    {
+        type = "array",
+        items = {
+            {
+                type = "string",
+            },
+            {
+                type = "string",
+                enum = {
+                    "in",
+                    "IN"
+                }
+            },
+            {
+                type = "array",
+                items = {
+                    {
+                        type = "string"
+                    }
+                }
+            }
+        },
+        minItems = 0,
+        maxItems = 10
+    },
 }
 
 local match_def = {
@@ -188,7 +213,21 @@ function _M.check_schema(conf)
 end
 
 
+local function in_array(l_v, r_v)
+    if type(r_v) == "table" then
+        for _,v in ipairs(r_v) do
+            if v == l_v then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+
 local operator_funcs = {
+    -- var value example: ["http_name", "==", "rose"]
     ["=="] = function(var, ctx)
         if ctx.var[var[1]] and ctx.var[var[1]] == var[3] then
             return true
@@ -235,7 +274,17 @@ local operator_funcs = {
             return true
         end
         return false
-    end
+    end,
+    ["IN"] = function(var, ctx)
+        -- l_v is left_value, r_v is right_value
+        local l_v, r_v = ctx.var[var[1]], var[3]
+        return in_array(l_v, r_v)
+    end,
+    ["in"] = function(var, ctx)
+        -- l_v is left_value, r_v is right_value
+        local l_v, r_v = ctx.var[var[1]], var[3]
+        return in_array(l_v, r_v)
+    end,
 }
 
 
@@ -299,15 +348,15 @@ local function set_upstream(upstream_info, ctx)
         weight = w
     end
 
-    local host, port = split_host_port(host_port)
-    local ip = parse_node_domain(host)
+    local domain_ip, port = split_host_port(host_port)
+    local host = parse_node_domain(domain_ip)
     ctx.var.upstream_host = host
 
     local up_conf = {
         name = upstream_info["name"],
         type = upstream_info["type"],
         nodes = {
-            {host = ip, port = port, weight = weight}
+            {host = host, port = port, weight = weight}
         }
     }
 
