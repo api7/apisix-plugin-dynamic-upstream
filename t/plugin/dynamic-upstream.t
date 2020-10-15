@@ -284,7 +284,7 @@ GET /server_port
                                                 "name": "upstream_A",
                                                 "type": "roundrobin",
                                                 "nodes": {
-                                                   "baidu.com": 0
+                                                   "github.com": 0
                                                 }
                                             },
                                             "weight": 1
@@ -318,11 +318,11 @@ passed
 
 
 
--- Currently `nodes` is single domain and will print `502` error log.
--- TODO: Error log printing is not allowed.
-=== TEST 9: node is domain name, the request normal
+=== TEST 9: node is domain name, the request normal(TODO: Error log printing is not allowed). Currently `nodes` is single domain and will print `301` status code.
 --- request
 GET /hello
---- error_code: 502
+--- error_code: 301
 --- error_log eval
-qr/dns resolver domain: baidu.com to \d+.\d+.\d+.\d+/
+qr/dns resolver domain: github.com to \d+.\d+.\d+.\d+/
+--- no_error_log
+[error]
