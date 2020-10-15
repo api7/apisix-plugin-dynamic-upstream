@@ -187,56 +187,51 @@ function _M.check_schema(conf)
 end
 
 
-local function generate_random_num(max_val)
-    local random_val = math.random(1,max_val)
-    return random_val
-end
-
-
 local operator_funcs = {
-    ["=="] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] == v2[3] then
+    -- var value example: ["http_name", "==", "rose"]
+    ["=="] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] == var[3] then
             return true
         end
         return false
     end,
-    ["~="] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] ~= v2[3] then
+    ["~="] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] ~= var[3] then
             return true
         end
         return false
     end,
-    ["~~"] = function(v2, ctx)
-        if not ctx.var[v2[1]] then
+    ["~~"] = function(var, ctx)
+        if not ctx.var[var[1]] then
             return false
         end
 
-        local from = re_find(ctx.var[v2[1]], v2[3], "jo")
+        local from = re_find(ctx.var[var[1]], var[3], "jo")
         if from then
             return true
         end
         return false
     end,
-    [">"] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] > v2[3] then
+    [">"] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] > var[3] then
             return true
         end
         return false
     end,
-    [">="] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] >= v2[3] then
+    [">="] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] >= var[3] then
             return true
         end
         return false
     end,
-    ["<"] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] < v2[3] then
+    ["<"] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] < var[3] then
             return true
         end
         return false
     end,
-    ["<="] = function(v2, ctx)
-        if ctx.var[v2[1]] and ctx.var[v2[1]] <= v2[3] then
+    ["<="] = function(var, ctx)
+        if ctx.var[var[1]] and ctx.var[var[1]] <= var[3] then
             return true
         end
         return false
@@ -249,7 +244,7 @@ local function set_upstream(upstream_info, ctx)
     local host_port, weight
     for k, v in pairs(nodes) do     -- TODO: support multiple nodes
         host_port = k
-        weight = v
+        weight    = v
     end
 
     local host_port_array = ngx_re.split(host_port, ":")
