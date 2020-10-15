@@ -104,7 +104,7 @@ local upstream_def = {
             },
             default = "roundrobin"
         },
-        nodes = { type = "object" },
+        nodes = { type = "object" , maxItems = 1},
         timeout = { type = "object" },
         enable_websocket = { type = "boolean" },
         pass_host = {
@@ -265,19 +265,17 @@ local function parse_domain(host)
 
     core.log.info("parse addr: ", core.json.delay_encode(ip_info))
     core.log.info("host: ", host)
-    if ip_info.address then
-        core.log.info("dns resolver domain: ", host, " to ", ip_info.address)
-        return ip_info.address
-    else
+    if not ip_info.address then
         return nil, "failed to parse domain"
     end
+
+    core.log.info("dns resolver domain: ", host, " to ", ip_info.address)
+    return ip_info.address
 end
 
 
-local function parse_domain_for_nodes(domain_ip)
-    -- TODO: support multiple nodes
-    if not ipmatcher.parse_ipv4(domain_ip) and
-            not ipmatcher.parse_ipv6(domain_ip) then
+local function parse_node_domain(domain_ip)
+    if not ipmatcher.parse_ipv4(domain_ip) and not ipmatcher.parse_ipv6(domain_ip) then
         local ip, err = parse_domain(domain_ip)
         if ip then
             return ip
@@ -295,14 +293,15 @@ end
 local function set_upstream(upstream_info, ctx)
     local nodes = upstream_info["nodes"]
     local host_port, weight
-    for k, v in pairs(nodes) do    -- TODO: support multiple nodes
-        host_port = k
-        weight = v
+    -- l_v means left value, r_v means right value
+    for l_v, r_v in pairs(nodes) do    -- TODO: support multiple nodes
+        host_port = l_v
+        weight = r_v
     end
 
-    local domain_ip, port = split_host_port(host_port)
-    local ip = parse_domain_for_nodes(domain_ip)
-    ctx.var.upstream_host = domain_ip
+    local host, port = split_host_port(host_port)
+    local ip = parse_node_domain(host)
+    ctx.var.upstream_host = host
 
     local up_conf = {
         name = upstream_info["name"],
