@@ -205,73 +205,6 @@ GET /server_port?name=1234
 
 
 
-=== TEST 4: add operation of `~~` in vars
---- config
-    location /t {
-        content_by_lua_block {
-            local t = require("lib.test_admin").test
-            local code, body = t('/apisix/admin/routes/1',
-                ngx.HTTP_PUT,
-                [[{
-                    "uri": "/server_port",
-                    "plugins": {
-                        "dynamic-upstream": {
-                            "rules": [
-                                {
-                                    "match": [
-                                        {
-                                            "vars": [
-                                                [ "arg_name","~~","[a-z]+" ]                                            
-                                            ]
-                                        }                            
-                                    ],
-                                    "upstreams": [
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_A",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                   "127.0.0.1:1981":20
-                                                }
-                                            },
-                                            "weight": 2
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    },
-                    "upstream": {
-                            "type": "roundrobin",
-                            "nodes": {
-                                "127.0.0.1:1980": 1
-                            }
-                    }                    
-                }]]
-                )
-            ngx.status = code
-            ngx.say(body)
-        }
-    }
---- request
-GET /t
---- response_body
-passed
---- no_error_log
-[error]
-
-
-
-=== TEST 5: regular check failed, and return 1980 port.
---- request
-GET /server_port?name=1234
---- response_body eval
-1980
---- no_error_log
-[error]
-
-
-
 === TEST 6: allow match configuration to be empty
 --- config
     location /t {
@@ -327,5 +260,69 @@ passed
 GET /server_port
 --- response_body eval  
 1981
+--- no_error_log
+[error]
+
+
+
+=== TEST 8: node is domain name
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/hello",
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "github.com": 0
+                                                }
+                                            },
+                                            "weight": 1
+                                        },
+                                        {
+                                            "weight": 1
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "upstream": {
+                        "type": "roundrobin",
+                        "nodes": {
+                            "127.0.0.1:1980": 1
+                        }
+                    }                    
+                }]]
+                )
+            ngx.status = code
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 9: node is domain name, the request normal(TODO: Error log printing is not allowed). Currently `nodes` is single domain and will print `301` status code.
+--- request
+GET /hello
+--- error_code: 301
+--- error_log eval
+qr/dns resolver domain: github.com to \d+.\d+.\d+.\d+/
 --- no_error_log
 [error]
