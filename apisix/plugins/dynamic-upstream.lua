@@ -311,9 +311,9 @@ end
 local function set_upstream(upstream_info, ctx)
     local nodes = upstream_info["nodes"]
     local host_port, weight
-    for node_h_p, node_w in pairs(nodes) do    -- TODO: support multiple nodes
-        host_port = node_h_p
-        weight = node_w
+    for k, v in pairs(nodes) do    -- TODO: support multiple nodes
+        host_port = k
+        weight = v
     end
 
     local domain_ip, port = split_host_port(host_port)

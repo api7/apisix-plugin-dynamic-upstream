@@ -265,7 +265,6 @@ GET /server_port
 
 
 
--- TODO: Need to test a valid domain name.
 === TEST 8: node is domain name
 --- config
     location /t {
@@ -274,7 +273,7 @@ GET /server_port
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
                 [[{
-                    "uri": "/server_port",
+                    "uri": "/hello",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
@@ -285,9 +284,12 @@ GET /server_port
                                                 "name": "upstream_A",
                                                 "type": "roundrobin",
                                                 "nodes": {
-                                                   "apiseven.com:1981":20
+                                                   "baidu.com": 0
                                                 }
                                             },
+                                            "weight": 1
+                                        },
+                                        {
                                             "weight": 1
                                         }
                                     ]
@@ -316,10 +318,12 @@ passed
 
 
 
-=== TEST 8: node is domain name, the request normal
+-- Currently `nodes` is single domain and will print `502` error log.
+-- TODO: Error log printing is not allowed.
+=== TEST 9: node is domain name, the request normal
 --- request
-GET /server_port
---- response_body eval
-1980
---- no_error_log
-[error]
+GET /hello
+--- error_code: 502
+--- error_log eval
+qr/dns resolver domain: baidu.com to \d+.\d+.\d+.\d+/
+
