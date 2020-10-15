@@ -257,14 +257,13 @@ end
 
 
 local function parse_domain(host)
-    local ip_info, err = core.utils.dns_parse(dns_resolver, host)
+    local ip_info, err = core.utils.dns_parse(host)
     if not ip_info then
         core.log.error("failed to parse domain: ", host, ", error: ",err)
         return nil, err
     end
 
     core.log.info("parse addr: ", core.json.delay_encode(ip_info))
-    core.log.info("resolver: ", core.json.delay_encode(dns_resolver))
     core.log.info("host: ", host)
     if ip_info.address then
         core.log.info("dns resolver domain: ", host, " to ", ip_info.address)
