@@ -14,12 +14,13 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
-local core     = require("apisix.core")
-local upstream = require("apisix.upstream")
-local ngx_re   = require("ngx.re")
+local core       = require("apisix.core")
+local upstream   = require("apisix.upstream")
+local ngx_re     = require("ngx.re")
 local roundrobin = require("resty.roundrobin")
-local re_find  = ngx.re.find
-local math     = math
+local ipmatcher  = require("resty.ipmatcher")
+local re_find    = ngx.re.find
+local math       = math
 
 local lrucache_rr_obj = core.lrucache.new({
     ttl = 0, count = 512,
@@ -143,7 +144,7 @@ local upstreams_def = {
             weight = {
                 type = "integer",
                 default = 1,
-                minimum = 0,
+                minimum = 0
             }
         }
     },
@@ -188,7 +189,6 @@ end
 
 
 local operator_funcs = {
-    -- var value example: ["http_name", "==", "rose"]
     ["=="] = function(var, ctx)
         if ctx.var[var[1]] and ctx.var[var[1]] == var[3] then
             return true
@@ -239,14 +239,7 @@ local operator_funcs = {
 }
 
 
-local function set_upstream(upstream_info, ctx)
-    local nodes = upstream_info["nodes"]
-    local host_port, weight
-    for k, v in pairs(nodes) do     -- TODO: support multiple nodes
-        host_port = k
-        weight    = v
-    end
-
+local function split_host_port(host_port)
     local host_port_array = ngx_re.split(host_port, ":")
     local host = host_port_array[1]
     local port = host_port_array[2]
@@ -258,6 +251,58 @@ local function set_upstream(upstream_info, ctx)
     end
 
     core.log.info("host: ", host, " port: ", port)
+
+    return host, port
+end
+
+
+local function parse_domain(host)
+    local ip_info, err = core.utils.dns_parse(dns_resolver, host)
+    if not ip_info then
+        core.log.error("failed to parse domain: ", host, ", error: ",err)
+        return nil, err
+    end
+
+    core.log.info("parse addr: ", core.json.delay_encode(ip_info))
+    core.log.info("resolver: ", core.json.delay_encode(dns_resolver))
+    core.log.info("host: ", host)
+    if ip_info.address then
+        core.log.info("dns resolver domain: ", host, " to ", ip_info.address)
+        return ip_info.address
+    else
+        return nil, "failed to parse domain"
+    end
+end
+
+
+local function parse_domain_for_nodes(domain_ip)
+    -- TODO: support multiple nodes
+    if not ipmatcher.parse_ipv4(domain_ip) and
+            not ipmatcher.parse_ipv6(domain_ip) then
+        local ip, err = parse_domain(domain_ip)
+        if ip then
+            return ip
+        end
+
+        if err then
+            return nil, err
+        end
+    end
+
+    return domain_ip
+end
+
+
+local function set_upstream(upstream_info, ctx)
+    local nodes = upstream_info["nodes"]
+    local host_port, weight
+    for k, v in pairs(nodes) do    -- TODO: support multiple nodes
+        host_port = k
+        weight = v
+    end
+
+    local domain_ip, port = split_host_port(host_port)
+    local host = parse_domain_for_nodes(domain_ip)
 
     local up_conf = {
         name = upstream_info["name"],
@@ -297,7 +342,6 @@ function _M.access(conf, ctx)
     local match_flag
     for _, rule in pairs(conf.rules) do
         match_flag = true
-        core.log.info("conf.rules: ", core.json.encode(conf.rules))
         for _, single_match in pairs(rule.match) do
             for _, var in pairs(single_match.vars) do
                 -- var example: ["http_name", "==", "rose"]
@@ -321,7 +365,6 @@ function _M.access(conf, ctx)
             break
         end
     end
-
 
     core.log.info("match_flag: ", match_flag)
 
