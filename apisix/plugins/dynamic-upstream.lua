@@ -348,15 +348,15 @@ local function set_upstream(upstream_info, ctx)
         weight = w
     end
 
-    local domain_ip, port = split_host_port(host_port)
-    local host = parse_node_domain(domain_ip)
+    local host, port = split_host_port(host_port)
+    local ip = parse_node_domain(host)
     ctx.var.upstream_host = host
 
     local up_conf = {
         name = upstream_info["name"],
         type = upstream_info["type"],
         nodes = {
-            {host = host, port = port, weight = weight}
+            {host = ip, port = port, weight = weight}
         }
     }
 

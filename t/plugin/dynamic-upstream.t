@@ -318,7 +318,7 @@ passed
 
 
 
-=== TEST 9: node is domain name, the request normal. Currently `nodes` is single domain and will print `301` status code.
+=== TEST 9: node is domain name, the request normal(TODO: Error log printing is not allowed). Currently `nodes` is single domain and will print `301` status code.
 --- request
 GET /hello
 --- error_code: 301
