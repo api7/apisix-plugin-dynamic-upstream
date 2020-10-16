@@ -287,7 +287,7 @@ local function create_ip_matcher(ip_list)
 end
 
 
-local function ip_in_operate(l_v, r_v)
+local function ip_in_match(l_v, r_v)
     local matcher = lrucache_rr_obj(r_v, nil, create_ip_matcher, r_v)
     if matcher then
         core.log.info("ip_in matching result: ", matcher:match(l_v))
@@ -360,13 +360,13 @@ local operator_funcs = {
     ["ip_in"] = function(var, ctx)
         if ctx.var[var[1]] and var[3] and #var[3] > 0 then
             local l_v, r_v = ctx.var[var[1]], var[3]
-            return ip_in_operate(l_v, r_v)
+            return ip_in_match(l_v, r_v)
         end
     end,
     ["IP_IN"] = function(var, ctx)
         if ctx.var[var[1]] and var[3] and #var[3] > 0 then
             local l_v, r_v = ctx.var[var[1]], var[3]
-            return ip_in_operate(l_v, r_v)
+            return ip_in_match(l_v, r_v)
         end
     end,
 }
