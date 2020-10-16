@@ -223,6 +223,8 @@ local function in_array(l_v, r_v)
             return true
         end
     end
+
+    return false
 end
 
 
