@@ -21,6 +21,20 @@ no_long_string();
 no_root_location();
 log_level("info");
 
+our $yaml_config = <<_EOC_;
+apisix:
+    node_listen: 1984
+    admin_key: ~
+plugins:                          # plugin list
+    - dynamic-upstream
+_EOC_
+
+add_block_preprocessor(sub {
+    my ($block) = @_;
+
+    $block->set_value("yaml_config", $yaml_config);
+});
+
 run_tests;
 
 __DATA__
@@ -41,9 +55,9 @@ __DATA__
                                     "match": [
                                         {
                                             "vars": [
-                                                [ "arg_name","==","jack" ]                                            
+                                                [ "arg_name","==","jack" ]
                                             ]
-                                        }                            
+                                        }
                                     ],
                                     "upstreams": [
                                         {
@@ -89,10 +103,12 @@ __DATA__
                             "nodes": {
                                 "127.0.0.1:1980": 1
                             }
-                    }                    
+                    }
                 }]]
-                )
-            ngx.status = code
+            )
+            if code >= 300 then
+                ngx.status = code
+            end
             ngx.say(body)
         }
     }
@@ -154,9 +170,9 @@ GET /server_port?name=james
                                     "match": [
                                         {
                                             "vars": [
-                                                [ "arg_name","~~","[a-z]+" ]                                            
+                                                [ "arg_name","~~","[a-z]+" ]
                                             ]
-                                        }                            
+                                        }
                                     ],
                                     "upstreams": [
                                         {
@@ -179,7 +195,7 @@ GET /server_port?name=james
                             "nodes": {
                                 "127.0.0.1:1980": 1
                             }
-                    }                    
+                    }
                 }]]
                 )
             ngx.status = code
@@ -239,7 +255,7 @@ GET /server_port?name=1234
                         "nodes": {
                             "127.0.0.1:1980": 1
                         }
-                    }                    
+                    }
                 }]]
                 )
             ngx.status = code
@@ -258,7 +274,7 @@ passed
 === TEST 7: send a request to empty match configuration
 --- request
 GET /server_port
---- response_body eval  
+--- response_body eval
 1981
 --- no_error_log
 [error]
@@ -302,7 +318,7 @@ GET /server_port
                         "nodes": {
                             "127.0.0.1:1980": 1
                         }
-                    }                    
+                    }
                 }]]
                 )
             ngx.status = code
@@ -346,9 +362,9 @@ qr/dns resolver domain: github.com to \d+.\d+.\d+.\d+/
                                         {
                                             "vars": [
                                                 [ "arg_name","in", ["james", "rose"] ],
-                                                [ "http_apisix-key","IN", ["hello", "world"] ] 
+                                                [ "http_apisix-key","IN", ["hello", "world"] ]
                                             ]
-                                        }                            
+                                        }
                                     ],
                                     "upstreams": [
                                         {
@@ -371,7 +387,7 @@ qr/dns resolver domain: github.com to \d+.\d+.\d+.\d+/
                             "nodes": {
                                 "127.0.0.1:1980": 1
                             }
-                    }                    
+                    }
                 }]]
                 )
             ngx.status = code
@@ -406,5 +422,101 @@ GET /server_port?name=jack
 apisix-key: world
 --- response_body eval
 1980
+--- no_error_log
+[error]
+
+
+
+=== TEST 13: big weight of upstream
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/server_port",
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1981":20
+                                                },
+                                                "timeout": {
+                                                    "connect": 15,
+                                                    "send": 15,
+                                                    "read": 15
+                                                }
+                                            },
+                                            "weight": 2000
+                                        },
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_B",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1982":10
+                                                },
+                                                "timeout": {
+                                                    "connect": 15,
+                                                    "send": 15,
+                                                    "read": 15
+                                                }
+                                            },
+                                            "weight": 1000
+                                        },
+                                        {
+                                            "weight": 1000
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "upstream": {
+                            "type": "roundrobin",
+                            "nodes": {
+                                "127.0.0.1:1980": 1
+                            }
+                    }
+                }]]
+                )
+            ngx.status = code
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 14: hit route
+--- config
+location /t {
+    content_by_lua_block {
+        local t = require("lib.test_admin").test
+        local bodys = {}
+        for i = 1, 8 do
+            local _, _, body = t('/server_port?name=jack', ngx.HTTP_GET)
+            bodys[i] = body
+        end
+        table.sort(bodys)
+        ngx.say(table.concat(bodys, ", "))
+    }
+}
+--- request
+GET /t
+--- response_body
+1980, 1980, 1981, 1981, 1981, 1981, 1982, 1982
 --- no_error_log
 [error]
