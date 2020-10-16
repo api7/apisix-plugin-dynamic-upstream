@@ -214,15 +214,15 @@ end
 
 
 local function in_array(l_v, r_v)
-    if type(r_v) == "table" then
-        for _,v in ipairs(r_v) do
-            if v == l_v then
-                return true
-            end
-        end
+    if type(r_v) ~= "table" then
+        return false
     end
 
-    return false
+    for _, v in ipairs(r_v) do
+        if v == l_v then
+            return true
+        end
+    end
 end
 
 
