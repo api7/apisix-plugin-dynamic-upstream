@@ -279,7 +279,7 @@ local function create_ip_matcher(ip_list)
     local ip, err = ipmatcher.new(ip_list)
     if not ip then
         core.log.error("failed to create ip matcher: ", err,
-                       " ip list: ", core.json.delay_encode(ip_list))
+                        " ip list: ", core.json.delay_encode(ip_list))
         return nil
     end
 
