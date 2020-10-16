@@ -326,3 +326,85 @@ GET /hello
 qr/dns resolver domain: github.com to \d+.\d+.\d+.\d+/
 --- no_error_log
 [error]
+
+
+
+=== TEST 10: operation is `in` or `IN`
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/server_port",
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "match": [
+                                        {
+                                            "vars": [
+                                                [ "arg_name","in", ["james", "rose"] ],
+                                                [ "http_apisix-key","IN", ["hello", "world"] ] 
+                                            ]
+                                        }                            
+                                    ],
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1981":2
+                                                }
+                                            },
+                                            "weight": 2
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "upstream": {
+                            "type": "roundrobin",
+                            "nodes": {
+                                "127.0.0.1:1980": 1
+                            }
+                    }                    
+                }]]
+                )
+            ngx.status = code
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 11: `var` rule passed, and return plugin port
+--- request
+GET /server_port?name=james
+--- more_headers
+apisix-key: world
+--- response_body eval
+1981
+--- no_error_log
+[error]
+
+
+
+=== TEST 12: `var` rule failed (name value error), and return default port
+--- request
+GET /server_port?name=jack
+--- more_headers
+apisix-key: world
+--- response_body eval
+1980
+--- no_error_log
+[error]
