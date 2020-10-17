@@ -520,3 +520,168 @@ GET /t
 1980, 1980, 1981, 1981, 1981, 1981, 1982, 1982
 --- no_error_log
 [error]
+
+
+
+=== TEST 15: operation is `ip_in` or `IP_IN`
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/server_port",
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "match": [
+                                        {
+                                            "vars": [
+                                                [ "http_ip-key","ip_in", ["127.0.0.0/10", "10.10.1.1"] ],
+                                                [ "http_real-ip","IP_IN", ["192.168.10.1", "10.10.0.0/16"] ] 
+                                            ]
+                                        }                            
+                                    ],
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1981":2
+                                                }
+                                            },
+                                            "weight": 2
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "upstream": {
+                            "type": "roundrobin",
+                            "nodes": {
+                                "127.0.0.1:1980": 1
+                            }
+                    }                    
+                }]]
+                )
+            ngx.status = code
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 16: ip_in and IP_IN match passed
+--- request
+GET /server_port
+--- more_headers
+ip-key: 127.0.0.1
+real-ip: 192.168.10.1
+--- response_body eval
+1981
+--- no_error_log
+[error]
+
+
+
+=== TEST 17: ip_in or IP_IN match failed( Missing real-ip )
+--- request
+GET /server_port
+--- more_headers
+ip-key: 127.0.0.1
+--- response_body eval
+1980
+--- no_error_log
+[error]
+
+
+
+=== TEST 18: ip_in or IP_IN match failed( real-ip error )
+--- request
+GET /server_port
+--- more_headers
+ip-key: 127.0.0.1
+real-ip: 192.168.10.2
+--- response_body eval
+1980
+--- no_error_log
+[error]
+
+
+
+=== TEST 19: ip list is empty
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/server_port",
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "match": [
+                                        {
+                                            "vars": [
+                                                [ "http_ip-key","ip_in", [] ]                                               
+                                            ]
+                                        }                            
+                                    ],
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1981":2
+                                                }
+                                            },
+                                            "weight": 2
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "upstream": {
+                            "type": "roundrobin",
+                            "nodes": {
+                                "127.0.0.1:1980": 1
+                            }
+                    }                    
+                }]]
+                )
+            ngx.status = code
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 20: ip list is empty, match failed
+--- request
+GET /server_port
+--- more_headers
+ip-key: 127.0.0.1
+--- response_body eval
+1980
+--- no_error_log
+[error]
