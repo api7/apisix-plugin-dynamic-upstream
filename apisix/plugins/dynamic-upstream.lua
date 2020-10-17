@@ -97,6 +97,27 @@ local option_def = {
         minItems = 0,
         maxItems = 10
     },
+    {
+        type = "array",
+        items = {
+            {
+                type = "string",
+            },
+            {
+                type = "string",
+                enum = {
+                    "ip_in",
+                    "IP_IN"
+                }
+            },
+            {
+                type = "array",
+                items = {anyOf = core.schema.ip_def},
+            }
+        },
+        minItems = 0,
+        maxItems = 10
+    }
 }
 
 local match_def = {
@@ -228,6 +249,55 @@ local function in_array(l_v, r_v)
 end
 
 
+local function valid_ip(ip)
+    local mask = 0
+    local sep_pos = str_find(ip, "/", 1, true)
+    if sep_pos then
+        mask = str_sub(ip, sep_pos + 1)
+        mask = tonumber(mask)
+        if mask < 0 or mask > 128 then
+            return false
+        end
+        ip = str_sub(ip, 1, sep_pos - 1)
+    end
+
+    if ipmatcher.parse_ipv4(ip) then
+        if mask < 0 or mask > 32 then
+            return false
+        end
+        return true
+    end
+
+    if mask < 0 or mask > 128 then
+        return false
+    end
+    return ipmatcher.parse_ipv6(ip)
+end
+
+
+local function create_ip_matcher(ip_list)
+    local ip, err = ipmatcher.new(ip_list)
+    if not ip then
+        core.log.error("failed to create ip matcher: ", err,
+                        " ip list: ", core.json.delay_encode(ip_list))
+        return nil
+    end
+
+    return ip
+end
+
+
+local function ip_in_match(ip, ip_list)
+    local matcher = lrucache_rr_obj(ip_list, nil, create_ip_matcher, ip_list)
+    if matcher then
+        core.log.info("ip_in matching result: ", matcher:match(ip))
+        return matcher:match(ip)
+    end
+
+    return false
+end
+
+
 local operator_funcs = {
     -- var value example: ["http_name", "==", "rose"]
     ["=="] = function(var, ctx)
@@ -286,6 +356,18 @@ local operator_funcs = {
         -- l_v is left_value, r_v is right_value
         local l_v, r_v = ctx.var[var[1]], var[3]
         return in_array(l_v, r_v)
+    end,
+    ["ip_in"] = function(var, ctx)
+        if ctx.var[var[1]] and var[3] and #var[3] > 0 then
+            local ip, ip_list = ctx.var[var[1]], var[3]
+            return ip_in_match(ip, ip_list)
+        end
+    end,
+    ["IP_IN"] = function(var, ctx)
+        if ctx.var[var[1]] and var[3] and #var[3] > 0 then
+            local ip, ip_list = ctx.var[var[1]], var[3]
+            return ip_in_match(ip, ip_list)
+        end
     end,
 }
 
