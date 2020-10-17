@@ -616,3 +616,72 @@ real-ip: 192.168.10.2
 1980
 --- no_error_log
 [error]
+
+
+
+=== TEST 19: ip list is empty
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/server_port",
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "match": [
+                                        {
+                                            "vars": [
+                                                [ "http_ip-key","ip_in", [] ]                                               
+                                            ]
+                                        }                            
+                                    ],
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1981":2
+                                                }
+                                            },
+                                            "weight": 2
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "upstream": {
+                            "type": "roundrobin",
+                            "nodes": {
+                                "127.0.0.1:1980": 1
+                            }
+                    }                    
+                }]]
+                )
+            ngx.status = code
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 20: ip list is empty, match failed
+--- request
+GET /server_port
+--- more_headers
+ip-key: 127.0.0.1
+--- response_body eval
+1980
+--- no_error_log
+[error]
