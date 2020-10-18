@@ -685,3 +685,233 @@ ip-key: 127.0.0.1
 1980
 --- no_error_log
 [error]
+
+
+
+=== TEST 21: Use two plugins related to upstream configuration at the same time. (Here is a test from another plugin)
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "upstream": {
+                        "nodes": {
+                            "127.0.0.1:1980": 1
+                        },
+                        "type": "roundrobin"
+                    },
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "match": [
+                                        {
+                                            "vars": [
+                                                [ "arg_pageNum","==","aa" ]
+                                            ]
+                                        }                            
+                                    ],
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1981":50
+                                                },
+                                                "timeout": {
+                                                    "connect": 60000,
+                                                    "send": 10000,
+                                                    "read": 10000
+                                                }
+                                            },
+                                            "weight": 700
+                                        },
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_B",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1982":50
+                                                },
+                                                "timeout": {
+                                                    "connect": 60000,
+                                                    "send": 10000,
+                                                    "read": 10000
+                                                }
+                                            },
+                                            "weight": 300
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "gbop-params-rewrite": {
+                            "convert": [
+                                {
+                                    "from": ["QUERY", "name"],
+                                    "to": ["PATH", "name"]
+                                }
+                            ]
+                        }
+                    },
+                    "uri": "/server_port"
+                }]]
+            )
+            if code >= 300 then
+                ngx.status = code
+            end
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 22: When the `params-rewrite` plugin does not configure `new_uri`, the upstream set in the `dynamic-upstream` plugin is valid
+--- config
+location /t {
+    content_by_lua_block {
+        local t = require("lib.test_admin").test
+        local bodys = {}
+        for i = 1, 10 do
+            local _, _, body = t('/server_port?pageNum=aa&name=100', ngx.HTTP_GET)
+            bodys[i] = body
+        end
+        table.sort(bodys)
+        ngx.say(table.concat(bodys, ", "))
+    }
+}
+--- request
+GET /t
+--- response_body
+1981, 1981, 1981, 1981, 1981, 1981, 1981, 1982, 1982, 1982
+--- no_error_log
+[error]
+
+
+
+=== TEST 23: `params-rewrite` plugin configuration `new_uri`
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "upstream": {
+                        "nodes": {
+                            "127.0.0.1:1980": 1
+                        },
+                        "type": "roundrobin"
+                    },
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "match": [
+                                        {
+                                            "vars": [
+                                                [ "arg_pageNum","==","aa" ]
+                                            ]
+                                        }                            
+                                    ],
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1981":50
+                                                },
+                                                "timeout": {
+                                                    "connect": 60000,
+                                                    "send": 10000,
+                                                    "read": 10000
+                                                }
+                                            },
+                                            "weight": 700
+                                        },
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_B",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                   "127.0.0.1:1982":50
+                                                },
+                                                "timeout": {
+                                                    "connect": 60000,
+                                                    "send": 10000,
+                                                    "read": 10000
+                                                }
+                                            },
+                                            "weight": 300
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "gbop-params-rewrite": {
+                            "new_uri": "/hello",
+                            "convert": [
+                                {
+                                    "from": ["QUERY", "name"],
+                                    "to": ["PATH", "name"]
+                                }
+                            ]
+                        }
+                    },
+                    "uri": "/server_port"
+                }]]
+            )
+            if code >= 300 then
+                ngx.status = code
+            end
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 24: If the `params-rewrite` plugin configures `new_uri`, the upstream set in the `dynamic-upstream` plugin is invalid.
+--- config
+location /t {
+    content_by_lua_block {
+        local t = require("lib.test_admin").test
+        local bodys = {}
+        for i = 1, 10 do
+            local _, _, body = t('/server_port?pageNum=aa&name=100', ngx.HTTP_GET)
+            bodys[i] = body
+        end
+        table.sort(bodys)
+        ngx.say(table.concat(bodys, ""))
+    }
+}
+--- request
+GET /t
+--- response_body
+hello world
+hello world
+hello world
+hello world
+hello world
+hello world
+hello world
+hello world
+hello world
+hello world
+--- no_error_log
+[error]
