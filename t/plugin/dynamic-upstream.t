@@ -540,7 +540,7 @@ GET /t
                                         {
                                             "vars": [
                                                 [ "http_ip-key","ip_in", ["127.0.0.0/10", "10.10.1.1"] ],
-                                                [ "http_real-ip","IP_IN", ["192.168.10.1", "10.10.0.0/16"] ] 
+                                                [ "http_real-ip","IP_IN", ["192.168.10.1", "10.10.0.0/16"] ]
                                             ]
                                         }                            
                                     ],
@@ -635,9 +635,9 @@ real-ip: 192.168.10.2
                                     "match": [
                                         {
                                             "vars": [
-                                                [ "http_ip-key","ip_in", [] ]                                               
+                                                [ "http_ip-key","ip_in", [] ]
                                             ]
-                                        }                            
+                                        }
                                     ],
                                     "upstreams": [
                                         {
@@ -660,7 +660,7 @@ real-ip: 192.168.10.2
                             "nodes": {
                                 "127.0.0.1:1980": 1
                             }
-                    }                    
+                    }
                 }]]
                 )
             ngx.status = code
@@ -683,5 +683,229 @@ GET /server_port
 ip-key: 127.0.0.1
 --- response_body eval
 1980
+--- no_error_log
+[error]
+
+
+
+=== TEST 21: support multiple ip configuration of `nodes`
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/server_port",
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                
+                                                "nodes": {
+                                                    "127.0.0.1:1982":2,
+                                                    "127.0.0.1:1981":1,
+                                                    "127.0.0.1:1980":1
+                                                },
+                                                "timeout": {
+                                                    "connect": 15,
+                                                    "send": 15,
+                                                    "read": 15
+                                                }
+                                            },
+                                            "weight": 2
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "upstream": {
+                            "type": "roundrobin",
+                            "nodes": {
+                                "127.0.0.1:1980": 1
+                            }
+                    }
+                }]]
+            )
+            if code >= 300 then
+                ngx.status = code
+            end
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 22: roundrobin the ip of nodes
+--- config
+location /t {
+    content_by_lua_block {
+        local t = require("lib.test_admin").test
+        local bodys = {}
+        for i = 1, 8 do
+            local _, _, body = t('/server_port', ngx.HTTP_GET)
+            bodys[i] = body
+        end
+        table.sort(bodys)
+        ngx.say(table.concat(bodys, ", "))
+    }
+}
+--- request
+GET /t
+--- response_body
+1980, 1980, 1981, 1981, 1982, 1982, 1982, 1982
+--- no_error_log
+[error]
+
+
+
+=== TEST 23: pass_host is node
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/server_port",
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                
+                                                "nodes": {
+                                                    "127.0.0.1:1982":2,
+                                                    "127.0.0.1:1981":1,
+                                                    "github.com":1
+                                                },
+                                                "timeout": {
+                                                    "connect": 15,
+                                                    "send": 15,
+                                                    "read": 15
+                                                },
+                                                "pass_host": "node"
+                                            },
+                                            "weight": 1
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "upstream": {
+                            "type": "roundrobin",
+                            "nodes": {
+                                "127.0.0.1:1980": 1
+                            }
+                    }
+                }]]
+            )
+            if code >= 300 then
+                ngx.status = code
+            end
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 24: upstream_host is github.com
+--- request
+GET /server_port
+--- error_code: 301
+--- error_log eval
+qr/upstream_host: github.com/
+--- no_error_log
+[error]
+
+
+
+=== TEST 25: pass_host is pass
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/server_port",
+                    "plugins": {
+                        "dynamic-upstream": {
+                            "rules": [
+                                {
+                                    "upstreams": [
+                                        {
+                                           "upstream": {
+                                                "name": "upstream_A",
+                                                
+                                                "nodes": {
+                                                    "127.0.0.1:1982":2,
+                                                    "127.0.0.1:1981":1,
+                                                    "github.com":1
+                                                },
+                                                "timeout": {
+                                                    "connect": 15,
+                                                    "send": 15,
+                                                    "read": 15
+                                                },
+                                                "pass_host": "pass"
+                                            },
+                                            "weight": 2
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "upstream": {
+                            "type": "roundrobin",
+                            "nodes": {
+                                "127.0.0.1:1980": 1
+                            }
+                    }
+                }]]
+            )
+            if code >= 300 then
+                ngx.status = code
+            end
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 26: upstream_host is localhost
+--- request
+GET /server_port
+--- error_code: 301
+--- error_log eval
+qr/upstream_host: localhost/
 --- no_error_log
 [error]
