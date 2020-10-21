@@ -425,23 +425,42 @@ end
 
 local function set_upstream(upstream_info, ctx)
     local nodes = upstream_info["nodes"]
-    local host_port, weight
-    -- h means host:port, w means weight
-    for h, w in pairs(nodes) do    -- TODO: support multiple nodes
-        host_port = h
-        weight = w
+    local new_nodes = {}
+    for host_port, weight in pairs(nodes) do
+        local node = {}
+        local ip, port, host
+        host, port = split_host_port(host_port)
+        ip = parse_node_domain(host)
+        node.host = ip
+        node.port = port
+        node.weight = weight
+        table_insert(new_nodes, node)
+        core.log.info("node: ", core.json.delay_encode(node))
+
+        if not core.utils.parse_ipv4(host) and not core.utils.parse_ipv6(host) then
+            if upstream_info["pass_host"] == "pass" then    -- TODO: support rewrite method
+                ctx.var.upstream_host = ctx.var.host
+
+            elseif upstream_info["pass_host"] == "node" then
+                ctx.var.upstream_host = host
+            end
+
+            core.log.info("upstream_host: ", ctx.var.upstream_host)
+            break   --has domian
+        end
     end
 
-    local host, port = split_host_port(host_port)
-    local ip = parse_node_domain(host)
-    ctx.var.upstream_host = host
+    core.log.info("new_node: ", core.json.delay_encode(new_nodes))
 
     local up_conf = {
         name = upstream_info["name"],
         type = upstream_info["type"],
-        nodes = {
-            {host = ip, port = port, weight = weight}
-        }
+        nodes = new_nodes,    
+        timeout = {
+            send = upstream_info.timeout["send"],
+            read = upstream_info.timeout["read"],
+            connect = upstream_info.timeout["connect"]
+        } 
     }
 
     local ok, err = upstream.check_schema(up_conf)
