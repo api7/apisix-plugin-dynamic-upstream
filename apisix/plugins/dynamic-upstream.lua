@@ -20,7 +20,7 @@ local ngx_re     = require("ngx.re")
 local roundrobin = require("resty.roundrobin")
 local ipmatcher  = require("resty.ipmatcher")
 local re_find    = ngx.re.find
-local math       = math
+local table_insert = table.insert
 
 local lrucache_rr_obj = core.lrucache.new({
     ttl = 0, count = 512,
@@ -455,12 +455,7 @@ local function set_upstream(upstream_info, ctx)
     local up_conf = {
         name = upstream_info["name"],
         type = upstream_info["type"],
-        nodes = new_nodes,    
-        timeout = {
-            send = upstream_info.timeout["send"],
-            read = upstream_info.timeout["read"],
-            connect = upstream_info.timeout["connect"]
-        } 
+        nodes = new_nodes
     }
 
     local ok, err = upstream.check_schema(up_conf)
