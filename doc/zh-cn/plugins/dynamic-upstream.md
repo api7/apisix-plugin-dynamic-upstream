@@ -24,7 +24,7 @@
   - [名字](#名字)
   - [属性](#属性)
   - [如何启用](#如何启用)
-    - [灰度发布](#蓝绿发布)
+    - [灰度发布](#灰度发布)
     - [蓝绿发布](#蓝绿发布)
     - [自定义发布](#自定义发布)
   - [测试插件](#测试插件)
@@ -36,31 +36,54 @@
 
 ## 名字
 
-`dynamic-upstream` 对请求进行条件匹配并按比率切分上游。
+流量分割插件，对请求流量按指定的比例划分，并将其分流到对应的 upstream。通过该插件可以实现 灰度发布、蓝绿发布和自定义发布功能。
 
 ## 属性
 
 | 参数名        | 类型          | 可选项 | 默认值 | 有效值 | 描述                 |
 | ------------ | ------------- | ------ | ------ | ------ | -------------------- |
 | rules        | array[object] | 必需  |       |        | 插件的配置列表 |
-| match        | array[object] | 必需  |        |        | 匹配规则列表 |
-| vars         | 匹配规则 | 可选   |        |        | 由一个或多个{var, operator, val}元素组成的列表，类似这样：{{var, operator, val}, {var, operator, val}, ...}}。例如：{"arg_name", "==", "json"}，表示当前请求参数 name 是 json。这里的 var 与 Nginx 内部自身变量命名是保持一致，所以也可以使用 request_uri、host 等；对于 operator 部分，目前已支持的运算符有 ==、~=、>、< 和 ~~。对于>和<两个运算符，会把结果先转换成 number 然后再做比较。 |
-| upstreams    | array[object] | 可选   |        |        | 上游配置规则列表。 |
-| upstream_id  | string | 可选   |        |        | 通过上游 id 绑定对应上游。 |
-| upstream     | object | 可选   |        |        | 上游配置信息。 |
-| type         | string | 可选   |        |        | roundrobin 支持权重的负载，chash 一致性哈希，两者是二选一的。 |
-| nodes        | object | 可选   |        |        | 上游节点信息 |
-| timeout      | object | 可选   |        |        | 上游超时时间 |
-| enable_websocket | boolean | 可选   |        |        | 是否启用 websocket（布尔值），默认不启用。 |
-| pass_host    | string | 可选   |        |        | pass 透传客户端请求的 host, node 不透传客户端请求的 host, 使用 upstream node 配置的 host, rewrite 使用 upstream_host 配置的值重写 host 。 |
-| upstream_host| string | 可选   |        |        | 只在 pass_host 配置为 rewrite 时有效。 |
-| weight       | integer | 可选   |        |        | 根据 weight 值来分配请求的比率。如 weight = 40，说明把40%的请求命中到该上游。 |
+| rules.match | array[object] | 可选  |        |        | 匹配规则列表  |
+| rules.match.vars |     | 可选   |        |        | 由一个或多个{var, operator, val}元素组成的列表，类似这样：{{var, operator, val}, {var, operator, val}, ...}}。例如：{"arg_name", "==", "json"}，表示当前请求参数 name 是 json。这里的 var 与 Nginx 内部自身变量命名是保持一致，所以也可以使用 request_uri、host 等；对于 operator 部分，目前已支持的运算符有 ==、~=、~~、>、>=、<、<=、in 和 ip_in。操作符的具体用法请看下文的 `运算符列表` 部分。 |
+| rules.upstreams    | array[object] | 可选   |        |        | 上游配置规则列表。 |
+| rules.upstreams.upstream_id  | string | 可选   |        |        | 通过上游 id 绑定对应上游。 |
+| rules.upstreams.upstream     | object | 可选   |        |        | 上游配置信息。 |
+| rules.upstreams.upstream.type | enum | 可选   |   roundrobin |  [roundrobin, chash]      | roundrobin 支持权重的负载，chash 一致性哈希，两者是二选一的。 |
+| rules.upstreams.upstream.nodes | object | 可选   |        |        | 哈希表，内部元素的 key 是上游机器地址 列表，格式为地址 + Port，其中地址部 分可以是 IP 也可以是域名，⽐如 192.168.1.100:80、foo.com:80等。 value 则是节点的权重，特别的，当权重 值为 0 有特殊含义，通常代表该上游节点 失效，永远不希望被选中。 |
+| rules.upstreams.upstream.timeout | object | 可选   |        |        | 设置连接、发送消息、接收消息的超时时 间 |
+| rules.upstreams.upstream.enable_websocket | boolean | 可选   |        |        | 是否启用 websocket，默认不启用。 |
+| rules.upstreams.upstream.pass_host  | enum | 可选   |        | ["pass", "node", "rewrite"]  | pass 透传客户端请求的 host, node 不透传客户端请求的 host; 使用 upstream node 配置的 host, rewrite 使用 upstream_host 配置的值重写 host 。 |
+| rules.upstreams.upstream.name  | string | 可选   |        |  | 标识上游服务名称、使⽤场景等。 |
+| rules.upstreams.upstream.upstream_host | string | 可选   |        |        | 只在 pass_host 配置为 rewrite 时有效。 |
+| rules.upstreams.weight       | integer | 可选   |   weight = 1     |        | 根据 weight 值来做流量切分。默认使用 roundrobin 算法，且目前只支持 roundrobin 算法。|
+
+### 运算符列表
+
+| 运算符 |  描述       |                        示例                                  |
+|-------|------------|--------------------------------------------------------------|
+| ==    | 相等        | {"arg_name", "==", "json"}                                   |
+| ~=    | 不等        | {"arg_name", "~=", "json"}                                   |
+| ~~    |  正则匹配    | {"arg_name", "~~", "[a-z]+"}                                |
+| <     | 小于        | {"arg_age", "<", 24}                                         |
+| <=    | 小于等于     | {"arg_age", "<=", 24}                                        |
+| >     | 大于        | {"arg_age", ">", 24}                                         |
+| >=    | 大于等于     | {"arg_age", ">=", 24}                                        |
+| in    | 在数组中查找 |  {"arg_name", "in",{"1","2"}}                                |
+| ip_in | 在数组中的ip | {"http_x_real_ip", "ip_in",{"10.10.0.0/16", "10.100.12.12"}} |
 
 ## 如何启用
 
 ### 灰度发布
 
-根据插件中 upstreams 部分配置的 weight 值，做流量分流。
+根据插件中 upstreams 配置的 weight 值做流量分流（不配置 `match` 的规则，已经默认 `match` 通过）。将请求流量按 4:2 划分，2/3 的流量到达插件中的 `1981` 端口上游， 1/3 的流量到达 route 上默认的 `1980` 端口上游。
+
+```json
+{
+    "weight": 2
+}
+```
+
+在插件 upstreams 中只有 `weight` 值，表示到达 route 上的 upstream 流量权重值。
 
 ```shell
 curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
@@ -70,11 +93,6 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
         "dynamic-upstream": {
             "rules": [
                 {
-                    "match": [
-                        {
-                            "vars": [ ]
-                        }            
-                    ],
                     "upstreams": [
                         {
                             "upstream": {
@@ -89,7 +107,10 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
                                     "read": 15
                                 }
                             },
-                            "weight": 40
+                            "weight": 4
+                        },
+                        {
+                            "weight": 2
                         }
                     ]
                 }
@@ -107,7 +128,7 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
 
 ### 蓝绿发布
 
-通过请求头获取蓝绿条件(也可以通过请求参数获取)，将插件 upstreams 的 weight 值设置为100，表示所有请求都命中到该upstrean (当 weight 为`0`时，表示所有请求命中 `route` 上默认的 upstream )。
+通过请求头获取蓝绿条件(也可以通过请求参数获取或NGINX变量)，在 `match` 规则匹配通过后，表示所有请求都命中到插件配置的 upstream ，否则所以请求只命中 `route` 上配置的 upstream 。
 
 ```shell
 curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
@@ -122,7 +143,7 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
                             "vars": [
                                 [ "http_new-release","==","blue" ]
                             ]
-                        }            
+                        }
                     ],
                     "upstreams": [
                         {
@@ -131,9 +152,8 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
                                 "type": "roundrobin",
                                 "nodes": {
                                     "127.0.0.1:1981":10
-                                }                                
-                            },
-                            "weight": 100
+                                }
+                            }
                         }
                     ]
                 }
@@ -151,7 +171,7 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
 
 ### 自定义发布
 
-`match` 中设置多个匹配规则，并设置 `weight` 值。
+`match` 中可以设置多个匹配规则(`vars` 中的多个条件是 `add` 的关系， 多个 `vars` 规则之间是 `or` 的关系；只要其中一个 vars 规则通过，则表示 `match` 通过), 这里就只配置了一个， 根据 `weight` 值将流量按 4:2 划分。其中只有 `weight` 部分表示 route 上的 upstream 所占的比例。 当 `match` 匹配不通过时，所有的流量只会命中 route 上的 upstream 。
 
 ```shell
 curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
@@ -179,7 +199,10 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
                                     "127.0.0.1:1981":10
                                 }
                             },
-                            "weight": 40
+                            "weight": 4
+                        },
+                        {
+                            "weight": 2
                         }
                     ]
                 }
@@ -195,13 +218,13 @@ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
 }'
 ```
 
-插件设置了请求的匹配规则并绑定端口为`1981`的 upstream，route上默认了端口为`1980`的upstream。
+插件设置了请求的匹配规则并设置端口为`1981`的 upstream，route 上具有端口为`1980`的upstream。
 
 ## 测试插件
 
 ### 灰度测试
 
-**将40%的请求命中到1981端口的upstream, 60%命中到1980端口的upstream。**
+**2/3 的请求命中到1981端口的upstream, 1/3 的流量命中到1980端口的upstream。**
 
 ```shell
 $ curl http://127.0.0.1:9080/index.html -i
@@ -230,11 +253,11 @@ Content-Type: text/html; charset=utf-8
 world 1981
 ```
 
-`weight` 为 `100` 所有请求都命中到插件配置的 `upstream` 。
+当 `match` 匹配通过后，所有请求都命中到插件配置的 `upstream`，否则命中 `route` 上配置的 upstream 。
 
 ### 自定义测试
 
-**`match` 规则校验成功,将40%的请求命中到1981端口的upstream, 60%命中到1980端口的upstream。**
+**在`match` 规则校验通过后, 2/3 的请求命中到1981端口的upstream, 1/3 命中到1980端口的upstream。**
 
 ```shell
 $ curl http://127.0.0.1:9080/index.html?name=jack -H 'user-id:30' -H 'apisix-key: hello' -i
@@ -286,4 +309,3 @@ $ curl http://127.0.0.1:9080/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f
     }
 }'
 ```
-
