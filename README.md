@@ -4,4 +4,4 @@
 
 插件详细信息，请查看插件文档：
 - [中文](doc/zh-cn/plugins/dynamic-upstream.md)
-- [English](../../plugins/dynamic-upstream.md)
+- [English](doc/plugins/dynamic-upstream.md)
