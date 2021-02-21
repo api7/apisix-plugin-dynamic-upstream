@@ -46,53 +46,19 @@ __DATA__
             local t = require("lib.test_admin").test
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
-                [[{
+                [=[{
                     "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
                                 {
                                     "match": [
-                                        {
-                                            "vars": [
-                                                [ "arg_name","==","jack" ]
-                                            ]
-                                        }
+                                        {"vars": [[ "arg_name","==","jack" ]]}
                                     ],
                                     "upstreams": [
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_A",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                   "127.0.0.1:1981":20
-                                                },
-                                                "timeout": {
-                                                    "connect": 15,
-                                                    "send": 15,
-                                                    "read": 15
-                                                }
-                                            },
-                                            "weight": 2
-                                        },
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_B",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                   "127.0.0.1:1982":10
-                                                },
-                                                "timeout": {
-                                                    "connect": 15,
-                                                    "send": 15,
-                                                    "read": 15
-                                                }
-                                            },
-                                            "weight": 1
-                                        },
-                                        {
-                                            "weight": 1
-                                        }
+                                        {"upstream": {"name": "upstream_A","type": "roundrobin","nodes": {"127.0.0.1:1981":20},"timeout": {"connect": 15,"send": 15,"read": 15}},"weight": 2},
+                                        {"upstream": {"name": "upstream_B","type": "roundrobin","nodes": {"127.0.0.1:1982":10},"timeout": {"connect": 15,"send": 15,"read": 15}},"weight": 1},
+                                        {"weight": 1}
                                     ]
                                 }
                             ]
@@ -104,7 +70,7 @@ __DATA__
                                 "127.0.0.1:1980": 1
                             }
                     }
-                }]]
+                }]=]
             )
             if code >= 300 then
                 ngx.status = code
@@ -161,30 +127,17 @@ GET /server_port?name=james
             local t = require("lib.test_admin").test
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
-                [[{
+                [=[{
                     "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
                                 {
                                     "match": [
-                                        {
-                                            "vars": [
-                                                [ "arg_name","~~","[a-z]+" ]
-                                            ]
-                                        }
+                                        {"vars": [[ "arg_name","~~","[a-z]+" ]]}
                                     ],
                                     "upstreams": [
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_A",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                   "127.0.0.1:1981":20
-                                                }
-                                            },
-                                            "weight": 2
-                                        }
+                                        {"upstream": {"name": "upstream_A","type": "roundrobin","nodes": {"127.0.0.1:1981":20}},"weight": 2}
                                     ]
                                 }
                             ]
@@ -196,7 +149,7 @@ GET /server_port?name=james
                                 "127.0.0.1:1980": 1
                             }
                     }
-                }]]
+                }]=]
                 )
             ngx.status = code
             ngx.say(body)
@@ -288,8 +241,8 @@ GET /server_port
             local t = require("lib.test_admin").test
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
-                [[{
-                    "uri": "/hello",
+                [=[{
+                    "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
@@ -300,12 +253,9 @@ GET /server_port
                                                 "name": "upstream_A",
                                                 "type": "roundrobin",
                                                 "nodes": {
-                                                   "github.com": 0
+                                                    "foo.com:80": 0
                                                 }
                                             },
-                                            "weight": 1
-                                        },
-                                        {
                                             "weight": 1
                                         }
                                     ]
@@ -319,7 +269,7 @@ GET /server_port
                             "127.0.0.1:1980": 1
                         }
                     }
-                }]]
+                }]=]
                 )
             ngx.status = code
             ngx.say(body)
@@ -334,14 +284,12 @@ passed
 
 
 
-=== TEST 9: node is domain name, the request normal(TODO: Error log printing is not allowed). Currently `nodes` is single domain and will print `301` status code.
+=== TEST 9: node is domain name, the request normal
 --- request
-GET /hello
---- error_code: 301
+GET /server_port
+--- error_code: 502
 --- error_log eval
-qr/dns resolver domain: github.com to \d+.\d+.\d+.\d+/
---- no_error_log
-[error]
+qr/dns resolver domain: foo.com to \d+.\d+.\d+.\d+/
 
 
 
@@ -352,31 +300,17 @@ qr/dns resolver domain: github.com to \d+.\d+.\d+.\d+/
             local t = require("lib.test_admin").test
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
-                [[{
+                [=[{
                     "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
                                 {
                                     "match": [
-                                        {
-                                            "vars": [
-                                                [ "arg_name","in", ["james", "rose"] ],
-                                                [ "http_apisix-key","IN", ["hello", "world"] ]
-                                            ]
-                                        }
+                                        {"vars": [[ "arg_name","in", ["james", "rose"] ],[ "http_apisix-key","IN", ["hello", "world"] ]]}
                                     ],
                                     "upstreams": [
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_A",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                   "127.0.0.1:1981":2
-                                                }
-                                            },
-                                            "weight": 2
-                                        }
+                                        {"upstream": {"name": "upstream_A","type": "roundrobin","nodes": {"127.0.0.1:1981":2}},"weight": 2}
                                     ]
                                 }
                             ]
@@ -388,7 +322,7 @@ qr/dns resolver domain: github.com to \d+.\d+.\d+.\d+/
                                 "127.0.0.1:1980": 1
                             }
                     }
-                }]]
+                }]=]
                 )
             ngx.status = code
             ngx.say(body)
@@ -434,46 +368,16 @@ apisix-key: world
             local t = require("lib.test_admin").test
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
-                [[{
+                [=[{
                     "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
                                 {
                                     "upstreams": [
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_A",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                   "127.0.0.1:1981":20
-                                                },
-                                                "timeout": {
-                                                    "connect": 15,
-                                                    "send": 15,
-                                                    "read": 15
-                                                }
-                                            },
-                                            "weight": 2000
-                                        },
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_B",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                   "127.0.0.1:1982":10
-                                                },
-                                                "timeout": {
-                                                    "connect": 15,
-                                                    "send": 15,
-                                                    "read": 15
-                                                }
-                                            },
-                                            "weight": 1000
-                                        },
-                                        {
-                                            "weight": 1000
-                                        }
+                                        {"upstream": {"name": "upstream_A","type": "roundrobin","nodes": {"127.0.0.1:1981":20},"timeout": {"connect": 15,"send": 15,"read": 15}},"weight": 2000},
+                                        {"upstream": {"name": "upstream_B","type": "roundrobin","nodes": {"127.0.0.1:1982":10},"timeout": {"connect": 15,"send": 15,"read": 15}},"weight": 1000},
+                                        {"weight": 1000}
                                     ]
                                 }
                             ]
@@ -485,7 +389,7 @@ apisix-key: world
                                 "127.0.0.1:1980": 1
                             }
                     }
-                }]]
+                }]=]
                 )
             ngx.status = code
             ngx.say(body)
@@ -530,31 +434,17 @@ GET /t
             local t = require("lib.test_admin").test
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
-                [[{
+                [=[{
                     "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
                                 {
                                     "match": [
-                                        {
-                                            "vars": [
-                                                [ "http_ip-key","ip_in", ["127.0.0.0/10", "10.10.1.1"] ],
-                                                [ "http_real-ip","IP_IN", ["192.168.10.1", "10.10.0.0/16"] ]
-                                            ]
-                                        }                            
+                                        {"vars": [[ "http_ip-key","ip_in", ["127.0.0.0/10", "10.10.1.1"] ],[ "http_real-ip","IP_IN", ["192.168.10.1", "10.10.0.0/16"] ]]}
                                     ],
                                     "upstreams": [
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_A",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                   "127.0.0.1:1981":2
-                                                }
-                                            },
-                                            "weight": 2
-                                        }
+                                        {"upstream": {"name": "upstream_A","type": "roundrobin","nodes": {"127.0.0.1:1981":2}},"weight": 2}
                                     ]
                                 }
                             ]
@@ -565,8 +455,8 @@ GET /t
                             "nodes": {
                                 "127.0.0.1:1980": 1
                             }
-                    }                    
-                }]]
+                    }
+                }]=]
                 )
             ngx.status = code
             ngx.say(body)
@@ -626,30 +516,17 @@ real-ip: 192.168.10.2
             local t = require("lib.test_admin").test
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
-                [[{
+                [=[{
                     "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
                                 {
                                     "match": [
-                                        {
-                                            "vars": [
-                                                [ "http_ip-key","ip_in", [] ]
-                                            ]
-                                        }
+                                        {"vars": [[ "http_ip-key","ip_in", [] ]]}
                                     ],
                                     "upstreams": [
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_A",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                   "127.0.0.1:1981":2
-                                                }
-                                            },
-                                            "weight": 2
-                                        }
+                                        {"upstream": {"name": "upstream_A","type": "roundrobin","nodes": {"127.0.0.1:1981":2}},"weight": 2}
                                     ]
                                 }
                             ]
@@ -661,7 +538,7 @@ real-ip: 192.168.10.2
                                 "127.0.0.1:1980": 1
                             }
                     }
-                }]]
+                }]=]
                 )
             ngx.status = code
             ngx.say(body)
@@ -695,30 +572,14 @@ ip-key: 127.0.0.1
             local t = require("lib.test_admin").test
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
-                [[{
+                [=[{
                     "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
                                 {
                                     "upstreams": [
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_A",
-                                                
-                                                "nodes": {
-                                                    "127.0.0.1:1982":2,
-                                                    "127.0.0.1:1981":1,
-                                                    "127.0.0.1:1980":1
-                                                },
-                                                "timeout": {
-                                                    "connect": 15,
-                                                    "send": 15,
-                                                    "read": 15
-                                                }
-                                            },
-                                            "weight": 2
-                                        }
+                                        {"upstream": {"name": "upstream_A","nodes": {"127.0.0.1:1982":2,"127.0.0.1:1981":1,"127.0.0.1:1980":1},"timeout": {"connect": 15,"send": 15,"read": 15}},"weight": 2}
                                     ]
                                 }
                             ]
@@ -730,7 +591,7 @@ ip-key: 127.0.0.1
                                 "127.0.0.1:1980": 1
                             }
                     }
-                }]]
+                }]=]
             )
             if code >= 300 then
                 ngx.status = code
@@ -777,31 +638,14 @@ GET /t
             local t = require("lib.test_admin").test
             local code, body = t('/apisix/admin/routes/1',
                 ngx.HTTP_PUT,
-                [[{
+                [=[{
                     "uri": "/server_port",
                     "plugins": {
                         "dynamic-upstream": {
                             "rules": [
                                 {
                                     "upstreams": [
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_A",
-                                                
-                                                "nodes": {
-                                                    "127.0.0.1:1982":2,
-                                                    "127.0.0.1:1981":1,
-                                                    "github.com":1
-                                                },
-                                                "timeout": {
-                                                    "connect": 15,
-                                                    "send": 15,
-                                                    "read": 15
-                                                },
-                                                "pass_host": "node"
-                                            },
-                                            "weight": 1
-                                        }
+                                        {"upstream": {"name": "upstream_A","nodes": {"127.0.0.1:1982":2,"127.0.0.1:1981":1,"foo.com:80":0},"timeout": {"connect": 15,"send": 15,"read": 15},"pass_host": "node"},"weight": 1}
                                     ]
                                 }
                             ]
@@ -813,7 +657,7 @@ GET /t
                                 "127.0.0.1:1980": 1
                             }
                     }
-                }]]
+                }]=]
             )
             if code >= 300 then
                 ngx.status = code
@@ -830,12 +674,22 @@ passed
 
 
 
-=== TEST 24: upstream_host is github.com
+=== TEST 24: upstream_host is foo.com
+--- config
+location /t {
+    content_by_lua_block {
+        local t = require("lib.test_admin").test
+        local _, body = t('/server_port',
+            ngx.HTTP_GET
+        )
+        ngx.status = 200
+        ngx.say(body)
+    }
+}
 --- request
-GET /server_port
---- error_code: 301
+GET /t
 --- error_log eval
-qr/upstream_host: github.com/
+qr/upstream_host: foo.com/
 --- no_error_log
 [error]
 
@@ -855,24 +709,7 @@ qr/upstream_host: github.com/
                             "rules": [
                                 {
                                     "upstreams": [
-                                        {
-                                           "upstream": {
-                                                "name": "upstream_A",
-                                                
-                                                "nodes": {
-                                                    "127.0.0.1:1982":2,
-                                                    "127.0.0.1:1981":1,
-                                                    "github.com":1
-                                                },
-                                                "timeout": {
-                                                    "connect": 15,
-                                                    "send": 15,
-                                                    "read": 15
-                                                },
-                                                "pass_host": "pass"
-                                            },
-                                            "weight": 2
-                                        }
+                                        {"upstream": {"name": "upstream_A","nodes": {"127.0.0.1:1982":2,"127.0.0.1:1981":1,"foo.com:80":1},"timeout": {"connect": 15,"send": 15,"read": 15},"pass_host": "pass"},"weight": 2}
                                     ]
                                 }
                             ]
@@ -902,10 +739,25 @@ passed
 
 
 === TEST 26: upstream_host is localhost
+--- config
+location /t {
+    content_by_lua_block {
+        local t = require("lib.test_admin").test
+        local headers = {}
+        headers["host"] = "localhost"
+        local code, body = t('/server_port',
+            ngx.HTTP_GET,
+            "",
+            nil,
+            headers
+        )
+        ngx.status = 200
+        ngx.say(body)
+    }
+}
 --- request
-GET /server_port
---- error_code: 301
---- error_log eval
-qr/upstream_host: localhost/
+GET /t
 --- no_error_log
 [error]
+--- error_log eval
+qr/upstream_host: localhost/
