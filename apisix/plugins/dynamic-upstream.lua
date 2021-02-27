@@ -446,7 +446,7 @@ local function set_upstream(upstream_info, ctx)
             end
 
             core.log.info("upstream_host: ", ctx.var.upstream_host)
-            break   --has domian
+            break   --has domain
         end
     end
 
@@ -520,7 +520,7 @@ function _M.access(conf, ctx)
 
     local rr_up, err = lrucache_rr_obj(upstreams, nil, new_rr_obj, upstreams)
     if not rr_up then
-        core.log.error("lrucache_rr_obj faild: ", err)
+        core.log.error("lrucache_rr_obj failed: ", err)
         return 500
     end
 
